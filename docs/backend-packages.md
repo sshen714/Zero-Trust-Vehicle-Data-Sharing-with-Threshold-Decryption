@@ -129,6 +129,27 @@ MySQL connection succeeded.
 
 `TokenResponse` 將 `token_type` 固定預設為 `bearer`，並要求 `expires_in` 是大於零的秒數。JWT 的實際產生與驗證會在後續的 `auth.py` 實作。
 
+### `backend/auth.py` 的用途
+
+`backend/auth.py` 集中處理密碼與 JWT，避免登入 API 自行重複實作安全細節。
+
+密碼處理包含：
+
+- `hash_password()` 使用 bcrypt cost factor 12 和每次自動產生的隨機 salt 建立雜湊。
+- `verify_password()` 比對輸入密碼與資料庫中的 bcrypt 雜湊；損壞的雜湊或超過長度的輸入會回傳 false，不會讓登入 API 崩潰。
+- `password_bytes()` 以 UTF-8 編碼密碼並限制最多 72 bytes，避免 bcrypt 靜默截斷。
+- `DUMMY_PASSWORD_HASH` 讓不存在的帳號也執行 bcrypt 比對，降低透過回應時間判斷帳號是否存在的風險。
+
+JWT 處理包含：
+
+- JWT Secret 從環境變數取得，且必須至少 32 UTF-8 bytes。
+- 簽章演算法固定為 `HS256`，驗證時只允許此演算法，不能接受 token 自行宣告其他演算法。
+- access token 包含使用者 ID `sub`、簽發時間 `iat`、到期時間 `exp`、簽發者 `iss` 與使用對象 `aud`。
+- `ACCESS_TOKEN_EXPIRE_MINUTES` 必須是 1–60 的整數，目前範本預設為 15 分鐘。
+- `decode_access_token()` 要求所有必要 claims 存在，並驗證簽章、期限、issuer 和 audience；失敗時由後續 API 統一轉為 HTTP 401。
+
+JWT 只保存使用者 ID，不保存密碼或角色。受保護 API 驗證 JWT 後，仍會用使用者 ID 重新查詢資料庫，以取得目前的角色與停權狀態。
+
 ## 4. bcrypt 如何處理密碼
 
 註冊時，後端將密碼交給 bcrypt，產生包含隨機鹽值與計算成本資訊的雜湊，再存入資料庫。相同密碼可以產生不同的雜湊。
