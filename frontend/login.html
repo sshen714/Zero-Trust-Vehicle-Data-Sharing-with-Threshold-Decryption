@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登入｜零信任車輛資料分享</title>
+</head>
+<body>
+    <main>
+        <h1>零信任車輛資料分享</h1>
+        <h2>登入</h2>
+        <p>請輸入帳號與密碼。</p>
+
+        <!-- 第一步只建立表單，尚未串接登入 API。 -->
+        <form id="login-form" method="post">
+            <p>
+                <label for="username">帳號</label>
+                <input id="username" name="username" type="text"
+                       autocomplete="username" maxlength="50" required>
+            </p>
+            <p>
+                <label for="password">密碼</label>
+                <input id="password" name="password" type="password"
+                       autocomplete="current-password" required>
+            </p>
+            <button type="button" disabled>登入（尚未串接）</button>
+        </form>
+
+        <p id="message" role="status" aria-live="polite">
+            目前為登入頁面預覽，尚未連接後端。
+        </p>
+    </main>
+</body>
+</html>
