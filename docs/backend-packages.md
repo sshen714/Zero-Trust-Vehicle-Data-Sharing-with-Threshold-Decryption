@@ -87,6 +87,24 @@ MySQL connection succeeded.
 
 這個測試只確認連線和帳號權限足以執行基本查詢，不會建立、修改或刪除資料表。
 
+### `backend/models.py` 與 `users` 資料表
+
+`backend/models.py` 使用 SQLAlchemy ORM 定義使用者模型。它繼承 `database.py` 提供的 `Base`，讓 SQLAlchemy 知道 Python 的 `User` 類別對應 MySQL 的 `users` 資料表。
+
+| 欄位 | 型別與限制 | 用途 |
+| --- | --- | --- |
+| `id` | 整數、主鍵、自動遞增 | 使用者的內部唯一識別值，也是 JWT 預計使用的 subject |
+| `username` | 最多 50 字元、唯一、索引、不可為空 | 登入帳號 |
+| `email` | 最多 254 字元、唯一、索引、不可為空 | 使用者 Email |
+| `hashed_password` | 最多 255 字元、不可為空 | 儲存 bcrypt 雜湊，絕不儲存明文密碼 |
+| `role` | MySQL ENUM、不可為空、預設 `visitor` | 後端授權時使用的目前角色 |
+| `is_active` | 布林值、不可為空、預設啟用 | 停權時設為 false，受保護 API 將拒絕存取 |
+| `created_at` | 日期時間、不可為空、由資料庫產生 | 記錄帳號建立時間 |
+
+角色由 `Role` 列舉集中定義，共有 `owner`、`visitor`、`vendor`、`supervisor_a`、`supervisor_b`、`admin`。公開註冊 API 日後會固定建立 `visitor`，不能接受前端指定角色。
+
+`models.py` 目前只描述資料表結構。匯入這個檔案不會自行建立資料表；建表會在 FastAPI 啟動流程加入，讓每一步可以分開檢查。正式系統後續若要修改既有資料表結構，應加入資料庫 migration 工具，而不是只修改 ORM 類別。
+
 ## 4. bcrypt 如何處理密碼
 
 註冊時，後端將密碼交給 bcrypt，產生包含隨機鹽值與計算成本資訊的雜湊，再存入資料庫。相同密碼可以產生不同的雜湊。
