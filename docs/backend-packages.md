@@ -2,7 +2,7 @@
 
 本文件說明第一階段登入系統需要的 Python 套件，以及它們如何配合前端與 MySQL。技術架構為 FastAPI、MySQL、SQLAlchemy、bcrypt 與 JWT，不使用 Docker。
 
-目前專案已建立前端登入頁、CSS 與 JavaScript；以下後端功能是接下來要逐步實作的內容。本文件不代表套件已安裝或後端已完成。
+目前專案已建立前端登入頁、CSS、JavaScript、Python 虛擬環境與資料庫連線模組。登入 API 仍會依照本文件後面的順序逐步完成。
 
 ## 1. 套件各自負責什麼
 
@@ -54,6 +54,38 @@ MySQL Server：實際儲存使用者資料
 SQLAlchemy 與 PyMySQL 都是 Python 套件，MySQL Server 則是獨立執行的資料庫服務。安裝 Python 套件不會自動安裝 MySQL Server，也不代表資料庫、帳號與權限已經設定完成。
 
 ORM 可以減少手寫 SQL 的需求，但仍需要正確設定資料表、連線與資料庫權限。
+
+### `backend/database.py` 的用途
+
+`backend/database.py` 是後端執行期間持續使用的正式程式，不是安裝完成後即可刪除的設定腳本。之後的 ORM 模型、登入 API 與權限檢查都會透過它存取 MySQL。
+
+它目前負責：
+
+- 自動讀取 `backend/.env`。如果作業系統已提供同名環境變數，系統環境變數優先，方便日後部署。
+- 檢查 `DB_USER`、`DB_PASSWORD` 與 `DB_NAME` 等必要設定，並拒絕空值及尚未替換的 `REPLACE_` 佔位值。
+- 檢查 `DB_PORT` 是介於 1 到 65535 的整數。
+- 使用 SQLAlchemy 的 `URL.create()` 組合資料庫 URL，安全處理資料庫密碼中的特殊字元，避免手動拼接 URL 時發生編碼錯誤。
+- 建立 SQLAlchemy MySQL engine，並指定 PyMySQL 驅動及 `utf8mb4` 字元集。
+- 建立 `SessionLocal`，讓每個 FastAPI 請求取得自己的資料庫 session；請求結束時由 context manager 關閉 session。
+- 提供 ORM 模型共用的 `Base`，後續的 `User` 等資料表模型都會繼承它。
+- 啟用 `pool_pre_ping=True`，從連線池取出連線時先確認連線仍有效，降低 MySQL 關閉閒置連線後出現失效連線的機率。
+- 設定 `pool_recycle=1800`，使用滿 30 分鐘的連線會在下次取用時重建。
+- 提供 `check_database_connection()`，以無副作用的 `SELECT 1` 測試連線。
+
+可在專案根目錄執行以下指令測試：
+
+```bash
+source .venv/bin/activate
+python -m backend.database
+```
+
+成功時會顯示：
+
+```text
+MySQL connection succeeded.
+```
+
+這個測試只確認連線和帳號權限足以執行基本查詢，不會建立、修改或刪除資料表。
 
 ## 4. bcrypt 如何處理密碼
 
