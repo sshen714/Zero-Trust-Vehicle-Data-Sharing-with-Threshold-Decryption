@@ -1,0 +1,114 @@
+/* 基本配色與尺寸 */
+:root {
+    color-scheme: light;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: #18304b;
+    background: #edf3f8;
+    line-height: 1.6;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+/* 登入卡片：手機與桌面皆置中 */
+body {
+    margin: 0;
+    min-height: 100vh;
+    min-height: 100svh;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+}
+
+main {
+    width: 100%;
+    max-width: 440px;
+    padding: 36px;
+    background: #fff;
+    border: 1px solid #dbe4ee;
+    border-radius: 16px;
+    box-shadow: 0 16px 48px rgb(24 48 75 / 8%);
+}
+
+h1 {
+    margin: 0 0 24px;
+    font-size: 1.4rem;
+    line-height: 1.4;
+}
+
+h2 {
+    margin: 0 0 8px;
+    font-size: 1.8rem;
+}
+
+p {
+    margin: 0 0 20px;
+}
+
+/* 表單 */
+form {
+    margin-top: 28px;
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #9eafc2;
+    border-radius: 8px;
+    background: #fff;
+    color: inherit;
+    font: inherit;
+}
+
+input:focus-visible,
+button:focus-visible {
+    outline: 3px solid #2263bf;
+    outline-offset: 3px;
+}
+
+button {
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 16px;
+    border: 0;
+    border-radius: 8px;
+    background: #174f9e;
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+    background: #103c7b;
+}
+
+button:disabled {
+    background: #e3e9f0;
+    color: #526478;
+    cursor: not-allowed;
+}
+
+#message {
+    margin: 24px 0 0;
+    color: #526478;
+    font-size: 0.9rem;
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 480px) {
+    body {
+        padding: 16px;
+    }
+
+    main {
+        padding: 24px;
+    }
+}
