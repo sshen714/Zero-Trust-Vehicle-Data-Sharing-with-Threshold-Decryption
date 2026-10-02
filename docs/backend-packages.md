@@ -105,6 +105,30 @@ MySQL connection succeeded.
 
 `models.py` 目前只描述資料表結構。匯入這個檔案不會自行建立資料表；建表會在 FastAPI 啟動流程加入，讓每一步可以分開檢查。正式系統後續若要修改既有資料表結構，應加入資料庫 migration 工具，而不是只修改 ORM 類別。
 
+### `backend/schemas.py` 的用途
+
+`backend/schemas.py` 使用 Pydantic 定義 API 可以接收與回傳的資料形狀。ORM 模型描述資料庫欄位，schema 則是 API 邊界的驗證規則；兩者用途不同。
+
+目前包含三個 schema：
+
+| Schema | 用途 |
+| --- | --- |
+| `RegisterRequest` | 驗證公開註冊時收到的帳號、Email 與密碼 |
+| `UserResponse` | 回傳安全的使用者資料，不包含密碼或 `hashed_password` |
+| `TokenResponse` | 登入成功後回傳 JWT 類型與有效秒數 |
+
+`RegisterRequest` 的規則如下：
+
+- `username` 長度為 3–50，只接受英文字母、數字、底線、句點與連字號。
+- `email` 必須是有效 Email，最長 254 字元。
+- `password` 至少 12 字元，最多 72 字元，而且 UTF-8 編碼後不能超過 bcrypt 的 72 bytes 上限。
+- 未定義的額外欄位會被拒絕，所以公開註冊不能夾帶 `role` 或 `is_active`。
+- 帳號前後的空白會清除；密碼內容不會被修改。
+
+`UserResponse` 開啟 `from_attributes`，因此可以從 SQLAlchemy `User` 物件建立回應。它只列出允許離開後端的欄位，刻意沒有 `password` 與 `hashed_password`。
+
+`TokenResponse` 將 `token_type` 固定預設為 `bearer`，並要求 `expires_in` 是大於零的秒數。JWT 的實際產生與驗證會在後續的 `auth.py` 實作。
+
 ## 4. bcrypt 如何處理密碼
 
 註冊時，後端將密碼交給 bcrypt，產生包含隨機鹽值與計算成本資訊的雜湊，再存入資料庫。相同密碼可以產生不同的雜湊。
