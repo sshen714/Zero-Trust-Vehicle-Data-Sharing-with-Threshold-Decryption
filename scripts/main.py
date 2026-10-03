@@ -1,26 +1,19 @@
 import numpy as np
 import sys
 from pathlib import Path
-
-# 專案根目錄
-ROOT = Path(__file__).resolve().parents[1]
-
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-
     
-from scripts.simulation_data import (
+from simulation_data import (
     generate_raw,
     save_raw_database
 )
 
-from scripts.decryption import (
+from decryption import (
     decrypt_location,
     decrypt_speed,
     decrypt_plate
 )
 
-from scripts.pets import (
+from pets import (
     apply_owner_pets,
     apply_researcher_pets,
     aggregate_traffic
