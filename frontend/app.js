@@ -186,7 +186,11 @@ async function loadWorkspace(token) {
     document.getElementById('workspace-task').textContent = data.task;
     const container = document.getElementById('workspace-data');
     container.replaceChildren();
-    if (data.records) renderTable(container, '我的車輛紀錄（最近 100 筆）', data.records);
+    if (data.notice) {
+        const notice = document.createElement('p');
+        notice.textContent = data.notice;
+        container.append(notice);
+    }
     if (data.traffic) renderTable(container, '交通概況（不含個別車輛位置）', [data.traffic]);
     if (data.requests) renderTable(container, '資料申請（最近 100 筆）', data.requests);
     if (data.analysis) {
@@ -200,7 +204,6 @@ async function loadWorkspace(token) {
     if (data.service) renderTable(container, '服務統計', [data.service]);
     if (data.users) renderTable(container, '帳號管理清單（前 100 筆）', data.users);
     document.getElementById('request-form').hidden = data.role !== 'vendor';
-    document.getElementById('record-form').hidden = data.role !== 'owner';
     if (data.role === 'supervisor_a' || data.role === 'supervisor_b') {
         const field = data.role === 'supervisor_a' ? 'decision_a' : 'decision_b';
         for (const request of data.requests.filter(r => r[field] === 'pending')) {
@@ -250,11 +253,5 @@ function bindWorkspace(token) {
         const form = event.currentTarget;
         workspaceAction(token, form.querySelector('button'), '/workspace/requests', {purpose:form.elements.purpose.value.trim()});
     });
-    document.getElementById('record-form').addEventListener('submit', event => {
-        event.preventDefault();
-        const form = event.currentTarget;
-        const data = Object.fromEntries(new FormData(form));
-        for (const key of ['lat', 'lng', 'speed_kmh']) data[key] = Number(data[key]);
-        workspaceAction(token, form.querySelector('button'), '/workspace/records', data);
-    });
+
 }
