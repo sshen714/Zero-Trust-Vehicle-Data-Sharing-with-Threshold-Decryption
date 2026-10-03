@@ -17,19 +17,12 @@
         </section>
         <section id="workspace" hidden aria-label="主管 A工作區">
             <h2>主管 A工作區</h2>
-            <p>精準位置資料的審核者</p>
+            <p>查詢精準位置資料，並透過主管 B OTP 解鎖精準速度</p>
             <p class="preview-notice">介面展示：以下內容與操作尚未連接資料查詢、申請、審核或 OTP 服務。</p>
             <ul class="access-list"><li>依車牌與時間查詢</li><li>時間與位置精準</li><li>速度預設模糊；主管 B OTP 解鎖</li></ul>
             
             <div class="role-grid">
-<section class="feature-card">
-<h3>位置資料審核</h3>
-<p>查看資料使用目的，核准或拒絕位置資料申請。</p>
 
-<div class="preview-actions"><button type="button" data-preview>查看待審申請</button>
-<button type="button" data-preview>核准／拒絕</button></div>
-
-</section>
 <section class="feature-card">
 <h3>位置資料查詢</h3>
 <p>依車牌及時間查看位置資料。</p>
@@ -39,8 +32,11 @@
 <input id="supervisor_a-1-1" type="datetime-local">
 <label for="supervisor_a-1-2">結束時間</label>
 <input id="supervisor_a-1-2" type="datetime-local">
+<label for="supervisor_a-otp">主管 B OTP（解鎖精準速度）</label>
+<input id="supervisor_a-otp" type="text" autocomplete="one-time-code" placeholder="請輸入主管 B OTP">
 <div class="preview-actions"><button type="button" data-preview>查詢位置</button>
-<button type="button" data-preview>申請主管 B OTP</button></div>
+<button type="button" data-preview>申請主管 B OTP</button>
+<button type="button" data-preview>驗證 OTP 並解鎖精準速度</button></div>
 
 </section>
             </div>

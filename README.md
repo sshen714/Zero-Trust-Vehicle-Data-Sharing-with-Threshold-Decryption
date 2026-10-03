@@ -226,12 +226,12 @@ vehicle_data_sharing.raw_trajectories
 | --- | --- | --- |
 | 車主 | `demo_owner` | 本人車牌唯讀欄位、查詢按鈕及結果空位，尚未串接資料 |
 | 訪客 | `demo_visitor` | 時間區間查詢、車流量、平均速度、壅塞程度（統計值為空） |
-| 合作廠商 | `demo_vendor` | 資料使用申請、核准資料分析、主管 A OTP 申請入口 |
-| 主管 A | `demo_supervisor_a` | 位置資料審核、位置查詢、主管 B OTP 申請入口 |
-| 主管 B | `demo_supervisor_b` | 速度資料審核、速度查詢、主管 A OTP 申請入口 |
+| 合作廠商 | `demo_vendor` | 資料使用申請、核准資料分析、主管 A OTP 申請與驗證入口（精準位置） |
+| 主管 A | `demo_supervisor_a` | 位置查詢、主管 B OTP 申請與驗證入口（精準速度） |
+| 主管 B | `demo_supervisor_b` | 速度查詢、主管 A OTP 申請與驗證入口（精準位置） |
 | 系統管理者 | `demo_admin` | 帳號管理、服務與日誌、資料查詢及 OTP 入口 |
 | 交通研究者 | `demo_researcher` | 依時間查詢研究資料，不顯示車牌查詢欄位 |
-| 警方 | `demo_police` | 案件編號、車牌、時間與位置查詢，以及案件 OTP 驗證入口 |
+| 警方 | `demo_police` | 依案件編號、車牌與時間查詢，以及案件 OTP 申請與驗證入口 |
 
 操作方式：開啟 `http://127.0.0.1:5500/login.html`，登入不同身份的測試帳號查看畫面；切換身份時先登出。所有工作區操作均為介面展示，未串接業務資料。已有的後端 API 保留，後續再逐步接上。
 
