@@ -23,6 +23,7 @@ from .database import Base, engine
 from .dependencies import CurrentUser, DbSession, require_roles
 from .models import Role, User
 from .schemas import RegisterRequest, TokenResponse, UserResponse
+from .workspace import router as workspace_router
 
 
 def get_cors_origins() -> List[str]:
@@ -60,6 +61,8 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Authorization", "Content-Type"],
 )
+
+app.include_router(workspace_router)
 
 
 @app.post(

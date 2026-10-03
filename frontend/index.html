@@ -8,7 +8,7 @@
     <script src="app.js" defer></script>
 </head>
 <body>
-    <main>
+    <main class="dashboard">
         <h1>零信任車輛資料分享</h1>
         <h2>我的帳號</h2>
 
@@ -22,6 +22,27 @@
                 <strong id="current-role"></strong>
             </p>
             <button id="logout" type="button">登出</button>
+        </section>
+
+        <section id="workspace" hidden aria-label="身份工作區">
+            <h2 id="workspace-title"></h2>
+            <p id="workspace-task"></p>
+            <div id="workspace-data"></div>
+            <form id="request-form" hidden>
+                <label for="purpose">資料使用目的（至少 10 字）</label>
+                <input id="purpose" name="purpose" minlength="10" maxlength="500" required>
+                <button type="submit">送出資料申請</button>
+            </form>
+            <form id="record-form" hidden>
+                <h3>提供車輛資料</h3>
+                <label>車輛編號<input name="vehicle_id" maxlength="32" required></label>
+                <label>紀錄時間<input name="recorded_at" type="datetime-local" required></label>
+                <label>緯度<input name="lat" type="number" min="-90" max="90" step="any" required></label>
+                <label>經度<input name="lng" type="number" min="-180" max="180" step="any" required></label>
+                <label>時速<input name="speed_kmh" type="number" min="0" max="300" step="any" required></label>
+                <button type="submit">新增我的紀錄</button>
+            </form>
+            <button id="refresh-workspace" type="button">重新整理資料</button>
         </section>
 
         <p id="message" role="status" aria-live="polite">

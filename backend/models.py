@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import Boolean, DateTime, Enum, String, func
+from sqlalchemy import Boolean, DateTime, Enum, String, ForeignKey, Float, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .database import Base
@@ -46,3 +46,31 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )
+
+
+class VehicleRecord(Base):
+    """Owner-linked records; legacy raw trajectories have no ownership mapping."""
+
+    __tablename__ = "vehicle_records"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    vehicle_id: Mapped[str] = mapped_column(String(32))
+    recorded_at: Mapped[datetime] = mapped_column(DateTime)
+    lat: Mapped[float] = mapped_column(Float)
+    lng: Mapped[float] = mapped_column(Float)
+    speed_kmh: Mapped[float] = mapped_column(Float)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class DataRequest(Base):
+    """Each supervisor's independent decision is retained separately."""
+
+    __tablename__ = "data_requests"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    vendor_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    purpose: Mapped[str] = mapped_column(String(500))
+    decision_a: Mapped[str] = mapped_column(String(16), default="pending")
+    decision_b: Mapped[str] = mapped_column(String(16), default="pending")
+    reviewer_a: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    reviewer_b: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
