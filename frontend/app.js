@@ -135,7 +135,7 @@ const profile = document.getElementById("profile");
 if (loginForm) initializeLoginPage(loginForm);
 if (profile) initializeProfilePage(profile);
 
-const ROLE_LABELS = {owner: '車主', visitor: '訪客', vendor: '合作廠商', supervisor_a: '主管 A', supervisor_b: '主管 B', admin: '系統管理者'};
+const ROLE_LABELS = {owner: '車主', visitor: '訪客', vendor: '合作廠商', supervisor_a: '主管 A', supervisor_b: '主管 B', admin: '系統管理者', researcher: '交通研究者', police: '警方'};
 const FIELD_LABELS = {vehicle_id:'車輛', recorded_at:'紀錄時間', lat:'緯度', lng:'經度', speed_kmh:'時速', is_demo:'模擬資料', record_count:'紀錄數', average_speed_kmh:'平均時速', slow_record_count:'低速紀錄數', demo_record_count:'模擬紀錄數', id:'編號', vendor_id:'申請者編號', purpose:'使用目的', decision_a:'主管 A', decision_b:'主管 B', status:'狀態', created_at:'建立時間', username:'帳號', role:'角色', is_active:'已啟用', user_count:'帳號數', vehicle_record_count:'車輛紀錄數', request_count:'申請數', date:'日期'};
 const STATES = {pending:'待審核', approved:'已核准', rejected:'已拒絕'};
 

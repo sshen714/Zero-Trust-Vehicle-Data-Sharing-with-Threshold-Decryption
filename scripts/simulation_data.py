@@ -93,7 +93,6 @@ def generate_raw(n_veh, n_days, rng, block=250, n=17, dt=5):
 def save_raw_database(df, table_name="raw_trajectories"):
     import sys
     from pathlib import Path
-    from sqlalchemy import text
 
     # simulation_data.py 在 script/ 裡，
     # database.py 在 backend/ 裡，所以先找到專案根目錄
@@ -104,6 +103,8 @@ def save_raw_database(df, table_name="raw_trajectories"):
 
     # 直接使用 database.py 已經建立好的 engine
     from backend.database import engine
+    from sqlalchemy import MetaData
+    from backend.models import RawTrajectory
 
     # 將模擬的 x / y 座標轉成經緯度
     lat, lng = to_ll(
@@ -128,24 +129,10 @@ def save_raw_database(df, table_name="raw_trajectories"):
 
     # 如果 table 不存在，就建立
     with engine.begin() as conn:
-        conn.execute(
-            text(
-                f"""
-                CREATE TABLE IF NOT EXISTS `{table_name}` (
-                    `id` BIGINT NOT NULL AUTO_INCREMENT,
-                    `vehicle_id` VARCHAR(32) NOT NULL,
-                    `timestamp` DATETIME NOT NULL,
-                    `lat` DECIMAL(12,6) NOT NULL,
-                    `lng` DECIMAL(12,6) NOT NULL,
-                    `speed_kmh` DECIMAL(8,1) DEFAULT NULL,
-
-                    PRIMARY KEY (`id`)
-                )
-                ENGINE=InnoDB
-                DEFAULT CHARSET=utf8mb4
-                """
-            )
-        )
+        table = RawTrajectory.__table__
+        if table_name != table.name:
+            table = table.to_metadata(MetaData(), name=table_name)
+        table.create(bind=conn, checkfirst=True)
 
         # 持續新增資料，不刪除原本內容
         out.to_sql(
