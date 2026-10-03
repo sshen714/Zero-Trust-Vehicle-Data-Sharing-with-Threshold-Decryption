@@ -150,6 +150,25 @@ JWT 處理包含：
 
 JWT 只保存使用者 ID，不保存密碼或角色。受保護 API 驗證 JWT 後，仍會用使用者 ID 重新查詢資料庫，以取得目前的角色與停權狀態。
 
+### `backend/dependencies.py` 的用途
+
+`backend/dependencies.py` 將身分驗證與角色授權包成 FastAPI dependency，讓每個受保護 API 使用同一套後端檢查。
+
+`get_current_user()` 的處理順序是：
+
+1. 從 `Authorization: Bearer <JWT>` 取得 token。沒有 Bearer token 時，FastAPI 的 OAuth2 dependency 直接回傳 HTTP 401。
+2. 呼叫 `decode_access_token()` 驗證簽章、期限、issuer、audience 與必要 claims。
+3. 嚴格解析 `sub` 為有效的正整數使用者 ID，不接受空白、正負號、小數或 Unicode 數字。
+4. 使用 ID 從 MySQL 重新取得 `User`，因此刪除帳號後，先前發出的 JWT 也不能繼續使用。
+5. 檢查資料庫中目前的 `is_active`；停權帳號回傳 HTTP 403。
+6. 回傳資料庫中的目前使用者，供 API 使用最新角色，不相信前端傳入的角色，也不把 JWT 內的角色當作權限來源。
+
+無效、過期、遭修改或找不到使用者的 token 統一回傳 HTTP 401，並帶有 `WWW-Authenticate: Bearer`。已成功辨識但已停權的帳號回傳 HTTP 403。
+
+`require_roles()` 用來建立角色 dependency。例如日後的使用者清單 API 會依賴 `require_roles(Role.ADMIN)`。它先執行完整的 `get_current_user()`，再檢查資料庫中的角色；角色不符時回傳 HTTP 403。
+
+`DbSession` 與 `CurrentUser` 是共用的型別別名，使 API 函式可以清楚宣告需要資料庫 session 或已驗證的使用者，同時讓 FastAPI 自動執行相應 dependency。
+
 ## 4. bcrypt 如何處理密碼
 
 註冊時，後端將密碼交給 bcrypt，產生包含隨機鹽值與計算成本資訊的雜湊，再存入資料庫。相同密碼可以產生不同的雜湊。
