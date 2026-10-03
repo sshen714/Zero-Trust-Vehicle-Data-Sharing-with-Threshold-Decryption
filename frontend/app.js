@@ -26,7 +26,9 @@ async function apiRequest(path, options = {}) {
     if (!response.ok) {
         const error = new Error(
             response.status === 401
-                ? "帳號或密碼錯誤，或登入憑證已過期。"
+                ? (path === "/auth/login"
+                    ? "登入失敗。請輸入註冊時的 username（非 email）與原始密碼，並確認帳號已啟用。"
+                    : "登入憑證無效或已過期，請重新登入。")
                 : response.status === 403
                     ? "帳號已停權，或沒有存取權限。"
                     : response.status === 422
