@@ -19,7 +19,7 @@ from .auth import (
     hash_password,
     verify_password,
 )
-from .database import Base, engine
+from .database import engine
 from .dependencies import CurrentUser, DbSession, require_roles
 from .models import Role, User
 from .schemas import RegisterRequest, TokenResponse, UserResponse
@@ -42,10 +42,11 @@ def get_cors_origins() -> List[str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Create missing tables on startup and close the engine at shutdown."""
-    Base.metadata.create_all(bind=engine)
-    yield
-    engine.dispose()
+    """Close the engine at shutdown; scripts/create_table.py handles table creation."""
+    try:
+        yield
+    finally:
+        engine.dispose()
 
 
 app = FastAPI(

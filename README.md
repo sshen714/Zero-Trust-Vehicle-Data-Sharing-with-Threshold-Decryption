@@ -134,6 +134,17 @@ MySQL connection succeeded.
 
 ## 4. 啟動 FastAPI 後端
 
+先在專案根目錄建立缺少的資料表：
+
+```bash
+source .venv/bin/activate
+python scripts/create_table.py
+```
+
+建表入口統一放在 `scripts/create_table.py`，使用 `backend/.env` 的資料庫設定。
+四張資料表的結構統一定義在 `backend/models.py`，建表腳本只負責執行建立。
+腳本可重複執行，不會刪除資料，也不會變更既有欄位；欄位變更仍需 migration。
+
 在專案根目錄執行：
 
 ```bash
@@ -141,7 +152,7 @@ source .venv/bin/activate
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-首次啟動時，FastAPI 會在 MySQL 中建立缺少的 `users` 資料表。開啟 API 文件：
+FastAPI 啟動時不再自動建立資料表。開啟 API 文件：
 
 ```text
 http://127.0.0.1:8000/docs
