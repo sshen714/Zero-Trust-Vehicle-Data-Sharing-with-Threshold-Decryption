@@ -90,74 +90,65 @@ def generate_raw(n_veh, n_days, rng, block=250, n=17, dt=5):
     return df, hospital_xy
 
 
-def save_raw_database(df, table_name="encrypted_trajectories"):
+def save_raw_database(df, table_name="raw_trajectories"):
     import sys
     from pathlib import Path
     from sqlalchemy import text
+
+    # simulation_data.py 在 script/ 裡，
+    # database.py 在 backend/ 裡，所以先找到專案根目錄
     root = Path(__file__).resolve().parents[1]
 
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
+
+    # 直接使用 database.py 已經建立好的 engine
     from backend.database import engine
-    from scripts.encryption import encrypt_dataframe
+
+    # 將模擬的 x / y 座標轉成經緯度
     lat, lng = to_ll(
         df.x.values,
         df.y.values
     )
 
-    plain_data = pd.DataFrame({
+    # 整理成準備寫入資料庫的格式
+    out = pd.DataFrame({
         "vehicle_id": df.vehicle_id.values,
         "timestamp": BASE_DATE + pd.to_timedelta(
             df.t.values,
             unit="s"
         ),
-        "lat": np.round(
-            lat,
-            6
-        ),
-        "lng": np.round(
-            lng,
-            6
-        ),
+        "lat": np.round(lat, 6),
+        "lng": np.round(lng, 6),
         "speed_kmh": np.round(
             df.speed_kmh.values,
             1
         ),
     })
 
-    encrypted_data = encrypt_dataframe(
-        plain_data
-    )
-
+    # 如果 table 不存在，就建立
     with engine.begin() as conn:
-
         conn.execute(
             text(
                 f"""
                 CREATE TABLE IF NOT EXISTS `{table_name}` (
                     `id` BIGINT NOT NULL AUTO_INCREMENT,
-
-                    `plate_enc` TEXT NOT NULL,
-
-                    `plate_lookup` CHAR(64) NOT NULL,
-
+                    `vehicle_id` VARCHAR(32) NOT NULL,
                     `timestamp` DATETIME NOT NULL,
+                    `lat` DECIMAL(12,6) NOT NULL,
+                    `lng` DECIMAL(12,6) NOT NULL,
+                    `speed_kmh` DECIMAL(8,1) DEFAULT NULL,
 
-                    `location_enc` TEXT NOT NULL,
-
-                    `speed_enc` TEXT NOT NULL,
-
-                    PRIMARY KEY (`id`),
-
-                    INDEX `idx_plate_lookup` (`plate_lookup`),
-                    INDEX `idx_timestamp` (`timestamp`)
+                    PRIMARY KEY (`id`)
                 )
                 ENGINE=InnoDB
                 DEFAULT CHARSET=utf8mb4
                 """
             )
         )
-        encrypted_data.to_sql(
+
+        # 持續新增資料，不刪除原本內容
+        out.to_sql(
             name=table_name,
             con=conn,
             if_exists="append",
@@ -165,8 +156,9 @@ def save_raw_database(df, table_name="encrypted_trajectories"):
             method="multi",
             chunksize=1000,
         )
+
     print(
-        f"成功寫入 {len(encrypted_data)} 筆加密資料到 MySQL：{table_name}"
+        f"成功寫入 {len(out)} 筆資料到 MySQL：{table_name}"
     )
 
 if __name__ == "__main__":
@@ -179,9 +171,9 @@ if __name__ == "__main__":
         rng=rng,
     )
 
-    save_raw_database(raw, table_name="encrypted_trajectories")
+    save_raw_database(raw, table_name="raw_trajectories")
 
     print(raw.head())
     print(f"共產生 {len(raw)} 筆紀錄")
     print(f"醫院座標：{hospital_xy}")
-    print("已儲存 encrypted_trajectories.csv")
+    print("已儲存 raw_trajectories.csv")

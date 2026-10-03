@@ -132,7 +132,24 @@ python -m backend.database
 MySQL connection succeeded.
 ```
 
-## 4. 執行車輛模擬資料
+## 4. 啟動 FastAPI 後端
+
+在專案根目錄執行：
+
+```bash
+source .venv/bin/activate
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+首次啟動時，FastAPI 會在 MySQL 中建立缺少的 `users` 資料表。開啟 API 文件：
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+可先使用 `POST /auth/register` 建立訪客帳號，再以 `POST /auth/login` 登入。`GET /auth/me` 需要 Bearer JWT；`GET /users` 僅允許 admin。停止後端時在終端機按 `Ctrl+C`。
+
+## 5. 執行車輛模擬資料
 
 確認虛擬環境、`backend/.env` 與 MySQL 連線都已設定完成後，在專案根目錄執行：
 
@@ -156,7 +173,7 @@ SELECT * FROM raw_trajectories LIMIT 10;
 SELECT COUNT(*) FROM raw_trajectories;
 ```
 
-## 5. 啟動前端
+## 6. 啟動前端
 
 在專案根目錄執行：
 
@@ -170,6 +187,8 @@ python3 -m http.server 5500 --bind 127.0.0.1 --directory frontend
 http://127.0.0.1:5500/login.html
 ```
 
+登入成功後會進入 `index.html` 個人資料頁。該頁會向 `GET /auth/me` 驗證 JWT，並顯示後端回傳的帳號與角色；登出會清除本分頁的登入憑證。
+
 ## 專案資料流
 
 ```text
@@ -181,3 +200,33 @@ MySQL
         ↓
 vehicle_data_sharing.raw_trajectories
 ```
+
+## 7. 六種身份與測試帳號
+
+已建立六種身份的本機測試帳號。建立與驗證腳本已移除。
+
+密碼已隨機產生，儲存在專案根目錄的 `.demo-accounts.json`（僅本機使用，已被 Git 忽略）。每個帳號均使用自己的密碼；登入時填 username。
+
+| 身份 | 測試帳號 | 登入後可取得的資料／功能 |
+| --- | --- | --- |
+| 車主 | `demo_owner` | 尚未設定帳號與車輛對應，暫不顯示個別軌跡 |
+| 訪客 | `demo_visitor` | 全體交通紀錄數、平均速度、低速紀錄數，不含個別位置 |
+| 合作廠商 | `demo_vendor` | 自己的申請；兩位主管核准後查看交通統計與每日分析 |
+| 主管 A | `demo_supervisor_a` | 查看申請與使用目的，記錄主管 A 的核准／拒絕 |
+| 主管 B | `demo_supervisor_b` | 查看申請，獨立記錄主管 B 的核准／拒絕 |
+| 系統管理者 | `demo_admin` | 帳號清單及服務筆數統計 |
+
+操作順序：
+
+1. 開啟 `http://127.0.0.1:5500/login.html`，使用車主帳號查看尚未設定車輛對應的提示。
+2. 登出後使用訪客帳號，確認畫面只提供交通概況。
+3. 使用廠商帳號填寫至少 10 字的資料使用目的並送出申請。
+4. 依序登入主管 A、主管 B，分別核准同一筆申請。每個主管只能記錄自己的審核結果，已記錄的結果不能覆寫。
+5. 回到廠商帳號重新整理。兩位都核准才會顯示每日交通分析；任一拒絕則該申請不授權。
+6. 使用管理者帳號查看帳號清單及服務統計。
+
+後端每次請求都重新查詢帳號角色及啟用狀態。公開註冊仍固定建立訪客，不能由前端指定主管或管理者角色。
+
+此版本為角色權限與雙人審核的第一階段：分析授權是帳號層級、無到期時間，只提供去除個別車輛識別的交通統計；事故分析、正式的授權範圍／撤銷流程、門檻解密及網站維護操作尚未實作。資料筆數少時，彙總值仍不等同匿名化保證。
+
+交通統計及每日分析使用既有的模擬資料表 `raw_trajectories`。車主與車輛尚未建立對應，因此暫不提供個別軌跡。資料申請仍使用 `data_requests`。

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的帳號｜零信任車輛資料分享</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="app.js" defer></script>
+</head>
+<body>
+    <main class="dashboard">
+        <h1>零信任車輛資料分享</h1>
+        <h2>我的帳號</h2>
+
+        <section id="profile" hidden aria-label="目前使用者">
+            <p class="account-row">
+                <span>帳號</span>
+                <strong id="current-username"></strong>
+            </p>
+            <p class="account-row">
+                <span>角色</span>
+                <strong id="current-role"></strong>
+            </p>
+            <button id="logout" type="button">登出</button>
+        </section>
+
+        <section id="workspace" hidden aria-label="身份工作區">
+            <h2 id="workspace-title"></h2>
+            <p id="workspace-task"></p>
+            <div id="workspace-data"></div>
+            <form id="request-form" hidden>
+                <label for="purpose">資料使用目的（至少 10 字）</label>
+                <input id="purpose" name="purpose" minlength="10" maxlength="500" required>
+                <button type="submit">送出資料申請</button>
+            </form>
+            <button id="refresh-workspace" type="button">重新整理資料</button>
+        </section>
+
+        <p id="message" role="status" aria-live="polite">
+            正在向後端驗證登入憑證…
+        </p>
+        <noscript>此頁面需要 JavaScript 才能驗證登入狀態。</noscript>
+    </main>
+</body>
+</html>
