@@ -1,10 +1,12 @@
 """Role-specific data and independent approval endpoints."""
+from datetime import datetime
+from decimal import Decimal, ROUND_FLOOR
 from typing import Annotated, Literal
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import select, func, text
 from .dependencies import CurrentUser, DbSession, require_roles
-from .models import Role, User, DataRequest
+from .models import Role, User, DataRequest, VehicleOwnership, RawTrajectory
 
 router = APIRouter(prefix='/workspace')
 LABELS = {Role.OWNER: ('車主', '提供車輛資料'), Role.VISITOR: ('訪客', '查看交通概況'), Role.VENDOR: ('合作廠商', '分析事故或交通資料'), Role.SUPERVISOR_A: ('主管 A', '審核資料使用目的'), Role.SUPERVISOR_B: ('主管 B', '獨立審核申請'), Role.ADMIN: ('系統管理者', '維護網站與服務')}
@@ -30,7 +32,16 @@ def workspace(db: DbSession, user: CurrentUser, response: Response):
     label, task = LABELS[user.role]
     result = dict(role=user.role, role_label=label, task=task)
     if user.role == Role.OWNER:
-        result['notice'] = '尚未設定帳號與車輛的對應，目前不提供個別軌跡。'
+        vehicles = db.scalars(
+            select(VehicleOwnership.vehicle_id)
+            .where(VehicleOwnership.owner_id == user.id)
+            .order_by(VehicleOwnership.vehicle_id)
+        ).all()
+        result['vehicles'] = [dict(vehicle_id=vehicle_id) for vehicle_id in vehicles]
+        result['notice'] = (
+            '請選擇綁定車輛與時間區間，查詢歷史軌跡。'
+            if vehicles else '尚未綁定車輛，目前不提供個別軌跡。'
+        )
     elif user.role == Role.VISITOR:
         result['traffic'] = traffic_summary(db)
     elif user.role in (Role.VENDOR, Role.SUPERVISOR_A, Role.SUPERVISOR_B):
@@ -52,6 +63,51 @@ def workspace(db: DbSession, user: CurrentUser, response: Response):
     else:
         result['notice'] = '此身份已加入，資料查詢功能尚未實作。'
     return result
+
+
+def blurred_range(value, step):
+    if value is None:
+        return None
+    step = Decimal(step)
+    lower = (Decimal(value) / step).to_integral_value(rounding=ROUND_FLOOR) * step
+    return f"{lower:f} 至 {lower + step:f}（不含上限）"
+
+
+@router.get('/trajectories')
+def owner_trajectories(
+    db: DbSession,
+    user: Annotated[User, Depends(require_roles(Role.OWNER))],
+    response: Response,
+    vehicle_id: Annotated[str, Query(min_length=1, max_length=32)],
+    start: datetime,
+    end: datetime,
+    offset: Annotated[int, Query(ge=0)] = 0,
+):
+    response.headers['Cache-Control'] = 'no-store'
+    if start.tzinfo is not None or end.tzinfo is not None:
+        raise HTTPException(422, 'Use local timestamps without a timezone offset')
+    if start > end:
+        raise HTTPException(422, 'Start must not be later than end')
+    binding = db.scalar(select(VehicleOwnership.id).where(
+        VehicleOwnership.owner_id == user.id,
+        VehicleOwnership.vehicle_id == vehicle_id,
+    ))
+    if binding is None:
+        raise HTTPException(403, 'Vehicle is not bound to this account')
+    rows = db.scalars(select(RawTrajectory).where(
+        RawTrajectory.vehicle_id == vehicle_id,
+        RawTrajectory.timestamp >= start,
+        RawTrajectory.timestamp <= end,
+    ).order_by(RawTrajectory.timestamp, RawTrajectory.id).offset(offset).limit(101)).all()
+    return dict(
+        offset=offset, page_size=100, has_more=len(rows) > 100,
+        records=[dict(
+            vehicle_id=row.vehicle_id, timestamp=row.timestamp,
+            latitude_range=blurred_range(row.lat, '0.01'),
+            longitude_range=blurred_range(row.lng, '0.01'),
+            speed_range=blurred_range(row.speed_kmh, '10'),
+        ) for row in rows[:100]],
+    )
 
 class RequestInput(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)

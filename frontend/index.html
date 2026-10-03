@@ -27,13 +27,8 @@
         <section id="workspace" hidden aria-label="身份工作區">
             <h2 id="workspace-title"></h2>
             <p id="workspace-task"></p>
+            <p class="preview-notice">介面展示：以下內容與操作尚未連接資料查詢、申請、審核或 OTP 服務。</p>
             <div id="workspace-data"></div>
-            <form id="request-form" hidden>
-                <label for="purpose">資料使用目的（至少 10 字）</label>
-                <input id="purpose" name="purpose" minlength="10" maxlength="500" required>
-                <button type="submit">送出資料申請</button>
-            </form>
-            <button id="refresh-workspace" type="button">重新整理資料</button>
         </section>
 
         <p id="message" role="status" aria-live="polite">
