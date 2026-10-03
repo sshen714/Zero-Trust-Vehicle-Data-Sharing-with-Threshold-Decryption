@@ -87,6 +87,69 @@ MySQL connection succeeded.
 
 這個測試只確認連線和帳號權限足以執行基本查詢，不會建立、修改或刪除資料表。
 
+### `backend/models.py` 與 `users` 資料表
+
+`backend/models.py` 使用 SQLAlchemy ORM 定義使用者模型。它繼承 `database.py` 提供的 `Base`，讓 SQLAlchemy 知道 Python 的 `User` 類別對應 MySQL 的 `users` 資料表。
+
+| 欄位 | 型別與限制 | 用途 |
+| --- | --- | --- |
+| `id` | 整數、主鍵、自動遞增 | 使用者的內部唯一識別值，也是 JWT 預計使用的 subject |
+| `username` | 最多 50 字元、唯一、索引、不可為空 | 登入帳號 |
+| `email` | 最多 254 字元、唯一、索引、不可為空 | 使用者 Email |
+| `hashed_password` | 最多 255 字元、不可為空 | 儲存 bcrypt 雜湊，絕不儲存明文密碼 |
+| `role` | MySQL ENUM、不可為空、預設 `visitor` | 後端授權時使用的目前角色 |
+| `is_active` | 布林值、不可為空、預設啟用 | 停權時設為 false，受保護 API 將拒絕存取 |
+| `created_at` | 日期時間、不可為空、由資料庫產生 | 記錄帳號建立時間 |
+
+角色由 `Role` 列舉集中定義，共有 `owner`、`visitor`、`vendor`、`supervisor_a`、`supervisor_b`、`admin`。公開註冊 API 日後會固定建立 `visitor`，不能接受前端指定角色。
+
+`models.py` 目前只描述資料表結構。匯入這個檔案不會自行建立資料表；建表會在 FastAPI 啟動流程加入，讓每一步可以分開檢查。正式系統後續若要修改既有資料表結構，應加入資料庫 migration 工具，而不是只修改 ORM 類別。
+
+### `backend/schemas.py` 的用途
+
+`backend/schemas.py` 使用 Pydantic 定義 API 可以接收與回傳的資料形狀。ORM 模型描述資料庫欄位，schema 則是 API 邊界的驗證規則；兩者用途不同。
+
+目前包含三個 schema：
+
+| Schema | 用途 |
+| --- | --- |
+| `RegisterRequest` | 驗證公開註冊時收到的帳號、Email 與密碼 |
+| `UserResponse` | 回傳安全的使用者資料，不包含密碼或 `hashed_password` |
+| `TokenResponse` | 登入成功後回傳 JWT 類型與有效秒數 |
+
+`RegisterRequest` 的規則如下：
+
+- `username` 長度為 3–50，只接受英文字母、數字、底線、句點與連字號。
+- `email` 必須是有效 Email，最長 254 字元。
+- `password` 至少 12 字元，最多 72 字元，而且 UTF-8 編碼後不能超過 bcrypt 的 72 bytes 上限。
+- 未定義的額外欄位會被拒絕，所以公開註冊不能夾帶 `role` 或 `is_active`。
+- 帳號前後的空白會清除；密碼內容不會被修改。
+
+`UserResponse` 開啟 `from_attributes`，因此可以從 SQLAlchemy `User` 物件建立回應。它只列出允許離開後端的欄位，刻意沒有 `password` 與 `hashed_password`。
+
+`TokenResponse` 將 `token_type` 固定預設為 `bearer`，並要求 `expires_in` 是大於零的秒數。JWT 的實際產生與驗證會在後續的 `auth.py` 實作。
+
+### `backend/auth.py` 的用途
+
+`backend/auth.py` 集中處理密碼與 JWT，避免登入 API 自行重複實作安全細節。
+
+密碼處理包含：
+
+- `hash_password()` 使用 bcrypt cost factor 12 和每次自動產生的隨機 salt 建立雜湊。
+- `verify_password()` 比對輸入密碼與資料庫中的 bcrypt 雜湊；損壞的雜湊或超過長度的輸入會回傳 false，不會讓登入 API 崩潰。
+- `password_bytes()` 以 UTF-8 編碼密碼並限制最多 72 bytes，避免 bcrypt 靜默截斷。
+- `DUMMY_PASSWORD_HASH` 讓不存在的帳號也執行 bcrypt 比對，降低透過回應時間判斷帳號是否存在的風險。
+
+JWT 處理包含：
+
+- JWT Secret 從環境變數取得，且必須至少 32 UTF-8 bytes。
+- 簽章演算法固定為 `HS256`，驗證時只允許此演算法，不能接受 token 自行宣告其他演算法。
+- access token 包含使用者 ID `sub`、簽發時間 `iat`、到期時間 `exp`、簽發者 `iss` 與使用對象 `aud`。
+- `ACCESS_TOKEN_EXPIRE_MINUTES` 必須是 1–60 的整數，目前範本預設為 15 分鐘。
+- `decode_access_token()` 要求所有必要 claims 存在，並驗證簽章、期限、issuer 和 audience；失敗時由後續 API 統一轉為 HTTP 401。
+
+JWT 只保存使用者 ID，不保存密碼或角色。受保護 API 驗證 JWT 後，仍會用使用者 ID 重新查詢資料庫，以取得目前的角色與停權狀態。
+
 ## 4. bcrypt 如何處理密碼
 
 註冊時，後端將密碼交給 bcrypt，產生包含隨機鹽值與計算成本資訊的雜湊，再存入資料庫。相同密碼可以產生不同的雜湊。
