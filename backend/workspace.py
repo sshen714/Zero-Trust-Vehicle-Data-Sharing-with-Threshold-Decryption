@@ -8,6 +8,10 @@ from .models import Role, User, DataRequest
 
 router = APIRouter(prefix='/workspace')
 LABELS = {Role.OWNER: ('車主', '提供車輛資料'), Role.VISITOR: ('訪客', '查看交通概況'), Role.VENDOR: ('合作廠商', '分析事故或交通資料'), Role.SUPERVISOR_A: ('主管 A', '審核資料使用目的'), Role.SUPERVISOR_B: ('主管 B', '獨立審核申請'), Role.ADMIN: ('系統管理者', '維護網站與服務')}
+LABELS.update({
+    Role.RESEARCHER: ('交通研究者', '研究車流、交通行為'),
+    Role.POLICE: ('警方', '肇逃、事故案件調查'),
+})
 
 def request_view(row):
     state = 'rejected' if 'rejected' in (row.decision_a, row.decision_b) else 'approved' if row.decision_a == row.decision_b == 'approved' else 'pending'
@@ -42,9 +46,11 @@ def workspace(db: DbSession, user: CurrentUser, response: Response):
                     "SELECT DATE(timestamp), COUNT(*), AVG(speed_kmh) FROM raw_trajectories "
                     "GROUP BY DATE(timestamp) ORDER BY DATE(timestamp) DESC LIMIT 30"
                 ))]
-    else:
+    elif user.role == Role.ADMIN:
         result['service'] = dict(user_count=db.scalar(select(func.count(User.id))), vehicle_record_count=db.scalar(text("SELECT COUNT(*) FROM raw_trajectories")), request_count=db.scalar(select(func.count(DataRequest.id))))
         result['users'] = [dict(id=u.id, username=u.username, role=u.role, is_active=u.is_active) for u in db.scalars(select(User).order_by(User.id).limit(100))]
+    else:
+        result['notice'] = '此身份已加入，資料查詢功能尚未實作。'
     return result
 
 class RequestInput(BaseModel):
