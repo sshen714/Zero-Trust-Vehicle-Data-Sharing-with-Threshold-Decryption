@@ -103,6 +103,19 @@ button:disabled {
     overflow-wrap: anywhere;
 }
 
+.account-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 24px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #dbe4ee;
+}
+
+.account-row strong {
+    overflow-wrap: anywhere;
+    text-align: right;
+}
+
 @media (max-width: 480px) {
     body {
         padding: 16px;

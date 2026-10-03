@@ -2,7 +2,7 @@
 
 本文件說明第一階段登入系統需要的 Python 套件，以及它們如何配合前端與 MySQL。技術架構為 FastAPI、MySQL、SQLAlchemy、bcrypt 與 JWT，不使用 Docker。
 
-目前專案已建立前端登入頁、CSS、JavaScript、資料庫連線模組、ORM schema 與 FastAPI API 主程式。前端登入後頁面仍待接續實作。
+目前專案已建立前端登入頁與個人資料頁、CSS、JavaScript、資料庫連線模組、ORM schema 與 FastAPI API 主程式。
 
 ## 1. 套件各自負責什麼
 
@@ -236,8 +236,9 @@ JWT Secret 是後端用來簽章與驗證的秘密值，必須由環境變數取
 4. bcrypt 比對密碼，後端同時確認帳號是否啟用。
 5. 驗證成功後，PyJWT 產生有期限的 JWT。
 6. 前端將 JWT 暫存於 `sessionStorage`。
-7. 前端帶著 JWT 呼叫 `GET /auth/me`。
-8. 後端驗證 JWT，重新查詢使用者狀態與角色，再回傳資料供前端顯示。
+7. 前端導向 `index.html`，並帶著 JWT 呼叫 `GET /auth/me`。
+8. 後端驗證 JWT，重新查詢使用者狀態與角色，再回傳資料供個人資料頁顯示。
+9. 登出時，前端清除本分頁的 JWT 並返回登入頁；若 JWT 無效、過期或帳號停權，後端拒絕請求，前端清除 JWT 並要求重新登入。
 
 `sessionStorage` 通常隨分頁工作階段結束而清除，但瀏覽器工作階段還原可能保留資料。同源 JavaScript 可以讀取它，因此仍需防範 XSS。清除瀏覽器中的 token 不會自動撤銷其他地方已複製的 token。
 

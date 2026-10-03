@@ -187,6 +187,8 @@ python3 -m http.server 5500 --bind 127.0.0.1 --directory frontend
 http://127.0.0.1:5500/login.html
 ```
 
+登入成功後會進入 `index.html` 個人資料頁。該頁會向 `GET /auth/me` 驗證 JWT，並顯示後端回傳的帳號與角色；登出會清除本分頁的登入憑證。
+
 ## 專案資料流
 
 ```text
