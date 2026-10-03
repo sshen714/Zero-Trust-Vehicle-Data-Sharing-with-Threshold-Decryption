@@ -132,7 +132,24 @@ python -m backend.database
 MySQL connection succeeded.
 ```
 
-## 4. 執行車輛模擬資料
+## 4. 啟動 FastAPI 後端
+
+在專案根目錄執行：
+
+```bash
+source .venv/bin/activate
+python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+首次啟動時，FastAPI 會在 MySQL 中建立缺少的 `users` 資料表。開啟 API 文件：
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+可先使用 `POST /auth/register` 建立訪客帳號，再以 `POST /auth/login` 登入。`GET /auth/me` 需要 Bearer JWT；`GET /users` 僅允許 admin。停止後端時在終端機按 `Ctrl+C`。
+
+## 5. 執行車輛模擬資料
 
 確認虛擬環境、`backend/.env` 與 MySQL 連線都已設定完成後，在專案根目錄執行：
 
@@ -156,7 +173,7 @@ SELECT * FROM raw_trajectories LIMIT 10;
 SELECT COUNT(*) FROM raw_trajectories;
 ```
 
-## 5. 啟動前端
+## 6. 啟動前端
 
 在專案根目錄執行：
 

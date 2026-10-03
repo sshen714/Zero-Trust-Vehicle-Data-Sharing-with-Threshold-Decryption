@@ -2,7 +2,7 @@
 
 本文件說明第一階段登入系統需要的 Python 套件，以及它們如何配合前端與 MySQL。技術架構為 FastAPI、MySQL、SQLAlchemy、bcrypt 與 JWT，不使用 Docker。
 
-目前專案已建立前端登入頁、CSS、JavaScript、Python 虛擬環境與資料庫連線模組。登入 API 仍會依照本文件後面的順序逐步完成。
+目前專案已建立前端登入頁、CSS、JavaScript、資料庫連線模組、ORM schema 與 FastAPI API 主程式。前端登入後頁面仍待接續實作。
 
 ## 1. 套件各自負責什麼
 
@@ -35,7 +35,7 @@ python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
 - `--port 8000`：使用 8000 埠。
 - `--reload`：開發時，程式修改後自動重新載入。
 
-目前尚未建立 `backend/main.py`，因此此指令要等後端完成後才能執行。
+`backend/main.py` 建立後，可在專案根目錄執行此指令啟動 API。
 
 ## 3. SQLAlchemy、PyMySQL 與 MySQL 的關係
 
@@ -103,7 +103,7 @@ MySQL connection succeeded.
 
 角色由 `Role` 列舉集中定義，共有 `owner`、`visitor`、`vendor`、`supervisor_a`、`supervisor_b`、`admin`。公開註冊 API 日後會固定建立 `visitor`，不能接受前端指定角色。
 
-`models.py` 目前只描述資料表結構。匯入這個檔案不會自行建立資料表；建表會在 FastAPI 啟動流程加入，讓每一步可以分開檢查。正式系統後續若要修改既有資料表結構，應加入資料庫 migration 工具，而不是只修改 ORM 類別。
+`models.py` 只描述資料表結構。匯入這個檔案不會自行建立資料表；FastAPI 啟動時會呼叫 SQLAlchemy `create_all()` 建立不存在的資料表。這不會修改既有資料表欄位；正式系統後續若要修改結構，應加入資料庫 migration 工具。
 
 ### `backend/schemas.py` 的用途
 
@@ -127,7 +127,7 @@ MySQL connection succeeded.
 
 `UserResponse` 開啟 `from_attributes`，因此可以從 SQLAlchemy `User` 物件建立回應。它只列出允許離開後端的欄位，刻意沒有 `password` 與 `hashed_password`。
 
-`TokenResponse` 將 `token_type` 固定預設為 `bearer`，並要求 `expires_in` 是大於零的秒數。JWT 的實際產生與驗證會在後續的 `auth.py` 實作。
+`TokenResponse` 將 `token_type` 固定預設為 `bearer`，並要求 `expires_in` 是大於零的秒數。JWT 的實際產生與驗證由 `auth.py` 負責。
 
 ### `backend/auth.py` 的用途
 
@@ -169,6 +169,23 @@ JWT 只保存使用者 ID，不保存密碼或角色。受保護 API 驗證 JWT 
 
 `DbSession` 與 `CurrentUser` 是共用的型別別名，使 API 函式可以清楚宣告需要資料庫 session 或已驗證的使用者，同時讓 FastAPI 自動執行相應 dependency。
 
+### `backend/main.py` 的用途
+
+`backend/main.py` 建立 FastAPI 應用程式，整合資料庫、bcrypt、JWT、身分驗證與角色授權。啟動時會以 SQLAlchemy `create_all()` 建立尚不存在的 ORM 資料表；它不會修改已存在資料表的結構，正式環境的結構變更應使用 migration。
+
+| API | 功能與權限 |
+| --- | --- |
+| `POST /auth/register` | 公開註冊，只接受帳號、Email、密碼，角色固定為 `visitor` |
+| `POST /auth/login` | 驗證帳號與密碼，成功後回傳有期限的 JWT |
+| `GET /auth/me` | 驗證 JWT 並重新查詢使用者狀態，回傳目前使用者 |
+| `GET /users` | 只有資料庫角色為 `admin` 的啟用使用者可取得清單 |
+
+註冊時會檢查帳號與 Email 是否重複，資料庫唯一限制也會防止並行請求重複建立。重複時回傳 HTTP 409。使用者清單支援分頁，`offset` 不可小於 0，`limit` 限制為 1–100。
+
+登入對不存在帳號、密碼錯誤或停權帳號使用相同 HTTP 401 回應。成功登入和受保護使用者資料都會加上 `Cache-Control: no-store`。
+
+CORS 從 `CORS_ORIGINS` 讀取逗號分隔的明確來源，預設允許 `http://localhost:5500` 與 `http://127.0.0.1:5500`，並拒絕萬用字元 `*`。CORS 只控制瀏覽器跨來源請求，不能取代 JWT 和角色權限驗證。
+
 ## 4. bcrypt 如何處理密碼
 
 註冊時，後端將密碼交給 bcrypt，產生包含隨機鹽值與計算成本資訊的雜湊，再存入資料庫。相同密碼可以產生不同的雜湊。
@@ -209,7 +226,7 @@ JWT Secret 是後端用來簽章與驗證的秘密值，必須由環境變數取
 5. 後端建立使用者，初始角色固定為 `visitor`。
 6. 回傳安全的使用者資訊，不包含密碼與密碼雜湊。
 
-目前前端只有登入表單，註冊介面會在後續步驟加入。
+前端註冊介面尚未加入；目前可透過 FastAPI `/docs` 呼叫註冊 API。
 
 ### 登入
 
