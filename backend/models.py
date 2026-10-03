@@ -20,6 +20,8 @@ class Role(StrEnum):
     SUPERVISOR_A = "supervisor_a"
     SUPERVISOR_B = "supervisor_b"
     ADMIN = "admin"
+    RESEARCHER = "researcher"
+    POLICE = "police"
 
 
 class User(Base):
