@@ -1,13 +1,14 @@
-fastapi>=0.115,<1
-uvicorn>=0.33,<0.34
-SQLAlchemy>=2.0.36,<2.1
-PyMySQL[rsa]>=1.1.1,<2
-bcrypt>=5.0,<6
-PyJWT>=2.9,<2.10
-python-dotenv>=1.0.1,<2
-python-multipart>=0.0.20,<1
-pydantic[email]>=2.10,<3
-numpy>=1.20.3,<1.25
-pandas>=2.0,<2.1
-matplotlib>=3.7,<3.8
-cryptography>=43,<44
+# Runtime dependencies for the team's Python 3.11 environment.
+fastapi==0.142.2
+uvicorn==0.33.0
+SQLAlchemy==2.0.54
+PyMySQL[rsa]==1.1.2
+bcrypt==5.0.0
+PyJWT==2.9.0
+python-dotenv==1.2.4
+python-multipart==0.0.32
+pydantic[email]==2.13.5
+numpy==1.24.4
+pandas==2.0.3
+matplotlib==3.7.5
+cryptography==43.0.3

@@ -6,43 +6,70 @@
 
 - [後端套件與登入流程說明](docs/backend-packages.md)
 
-## 1. Clone 後建立 Python 虛擬環境
+## 1. Clone 後安裝 Python 3.11 與專案套件
 
-`.venv/` 是每位開發者電腦上的 Python 虛擬環境，不會提交到 GitHub。第一次 clone 專案後，請在專案根目錄執行：
+本專案使用 Python 3.11。`.venv/` 是每位開發者在自己電腦建立的虛擬環境，不會提交到 GitHub。若 Ubuntu 內建的是其他 Python 版本，可用 `uv` 安裝獨立的 Python 3.11，不會更改系統 Python。
+
+先安裝 Git、curl 與 MySQL Server（若尚未安裝）：
 
 ```bash
-python3 -m venv .venv
+sudo apt update
+sudo apt install git curl mysql-server
+```
+
+從 GitHub 取得專案並進入資料夾：
+
+```bash
+git clone <GitHub repository URL>
+cd Zero-Trust-Vehicle-Data-Sharing-with-Threshold-Decryption
+```
+
+安裝 `uv`，並讓目前的 Bash 終端機找到它：
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv-installer.sh
+sh /tmp/uv-installer.sh
+source "$HOME/.local/bin/env"
+```
+
+使用 `uv` 安裝 Python 3.11，並建立包含 pip 的虛擬環境：
+
+```bash
+uv python install 3.11
+uv venv --seed --python 3.11 .venv
 source .venv/bin/activate
+```
+
+安裝 Python 套件：
+
+```bash
+python --version
 python -m pip install --upgrade pip
 python -m pip install -r backend/requirements.txt
 ```
 
-成功啟用後，終端機提示字元前面會出現 `(.venv)`。可用以下指令確認：
+`python --version` 應顯示 Python 3.11.x。安裝過程若出現錯誤，先確認使用的是虛擬環境中的 Python：
 
 ```bash
 which python
 ```
 
-輸出路徑應指向目前專案中的 `.venv/bin/python`。每次開啟新的終端機後，都要在專案根目錄重新執行：
+路徑應指向專案的 `.venv/bin/python`。往後每次開啟新的終端機，都在專案根目錄重新執行：
 
 ```bash
 source .venv/bin/activate
 ```
 
-如果建立 `.venv` 時顯示缺少 `ensurepip` 或 `venv`，Ubuntu 可先安裝：
+若先前留下建立失敗的 `.venv`，先確認其中沒有要保留的資料，再移除並重建：
 
 ```bash
-sudo apt update
-sudo apt install python3-venv
+rm -r .venv
+uv venv --seed --python 3.11 .venv
+source .venv/bin/activate
+python -m pip install -r backend/requirements.txt
 ```
 
-若錯誤訊息指定版本套件，例如 Python 3.8 的 `python3.8-venv`，請依訊息安裝：
-
-```bash
-sudo apt install python3.8-venv
-```
-
-刪除建立失敗的 `.venv`，再重新執行本節最前面的建立與安裝指令。
+Python 版本管理說明可參考 [uv 官方 Python 安裝文件](https://docs.astral.sh/uv/guides/install-python/)。
 
 ## 2. 建立環境設定
 
