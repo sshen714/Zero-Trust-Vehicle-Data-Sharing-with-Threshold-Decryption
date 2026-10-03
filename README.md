@@ -198,7 +198,7 @@ python3 -m http.server 5500 --bind 127.0.0.1 --directory frontend
 http://127.0.0.1:5500/login.html
 ```
 
-登入成功後會進入 `index.html` 個人資料頁。該頁會向 `GET /auth/me` 驗證 JWT，並顯示後端回傳的帳號與角色；登出會清除本分頁的登入憑證。
+登入成功後進入 `index.html` 導向頁，由 `GET /auth/me` 驗證 JWT 與身份後前往各自的 HTML 工作區。每個工作區也會驗證身份，身份不符時導向自己的頁面；登出會清除本分頁的登入憑證。
 
 ## 專案資料流
 
@@ -217,6 +217,8 @@ vehicle_data_sharing.raw_trajectories
 目前本機已建立八種身份的測試帳號。帳號及密碼不隨 Git 提交，其他開發者 clone 專案後不會自動取得這些帳號。建立與驗證腳本已移除，`scripts/create_table.py` 只負責建表，不建立帳號。
 
 密碼已隨機產生，儲存在專案根目錄的 `.demo-accounts.json`（僅本機使用，已被 Git 忽略）。每個帳號均使用自己的密碼；登入時填 username。
+
+八種身份的介面分別位於 `frontend/owner.html`、`visitor.html`、`vendor.html`、`supervisor_a.html`、`supervisor_b.html`、`admin.html`、`researcher.html`、`police.html`。`index.html` 只負責登入後導頁，`app.js` 處理共用登入驗證與展示按鈕，不產生角色畫面。
 
 目前先製作八種身份的前端展示畫面。登入仍呼叫 `/auth/login` 與 `/auth/me` 驗證身份；工作區不呼叫 `/workspace`、歷史軌跡、申請或審核 API。畫面的資料權限文字是預定設計，並不表示 OTP、PETs 或查詢流程已完成。操作按鈕只顯示展示提示，不會查詢、上傳或儲存資料。
 

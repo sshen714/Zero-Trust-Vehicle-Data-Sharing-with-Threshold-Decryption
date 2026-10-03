@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>主管 A工作區｜零信任車輛資料分享</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="app.js" defer></script>
+</head>
+<body data-role="supervisor_a">
+    <main class="dashboard">
+        <h1>零信任車輛資料分享</h1>
+        <section id="profile" hidden aria-label="目前使用者">
+            <p class="account-row"><span>帳號</span><strong id="current-username"></strong></p>
+            <p class="account-row"><span>角色</span><strong id="current-role"></strong></p>
+            <button id="logout" type="button">登出</button>
+        </section>
+        <section id="workspace" hidden aria-label="主管 A工作區">
+            <h2>主管 A工作區</h2>
+            <p>精準位置資料的審核者</p>
+            <p class="preview-notice">介面展示：以下內容與操作尚未連接資料查詢、申請、審核或 OTP 服務。</p>
+            <ul class="access-list"><li>依車牌與時間查詢</li><li>時間與位置精準</li><li>速度預設模糊；主管 B OTP 解鎖</li></ul>
+            
+            <div class="role-grid">
+<section class="feature-card">
+<h3>位置資料審核</h3>
+<p>查看資料使用目的，核准或拒絕位置資料申請。</p>
+
+<div class="preview-actions"><button type="button" data-preview>查看待審申請</button>
+<button type="button" data-preview>核准／拒絕</button></div>
+
+</section>
+<section class="feature-card">
+<h3>位置資料查詢</h3>
+<p>依車牌及時間查看位置資料。</p>
+<label for="supervisor_a-1-0">車牌</label>
+<input id="supervisor_a-1-0" type="text" placeholder="請輸入車牌">
+<label for="supervisor_a-1-1">開始時間</label>
+<input id="supervisor_a-1-1" type="datetime-local">
+<label for="supervisor_a-1-2">結束時間</label>
+<input id="supervisor_a-1-2" type="datetime-local">
+<div class="preview-actions"><button type="button" data-preview>查詢位置</button>
+<button type="button" data-preview>申請主管 B OTP</button></div>
+
+</section>
+            </div>
+        </section>
+        <p id="message" role="status" aria-live="polite">正在驗證登入身份…</p>
+        <noscript>請啟用 JavaScript 以驗證登入身份。</noscript>
+    </main>
+</body>
+</html>

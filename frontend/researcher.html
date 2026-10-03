@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>交通研究者工作區｜零信任車輛資料分享</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="app.js" defer></script>
+</head>
+<body data-role="researcher">
+    <main class="dashboard">
+        <h1>零信任車輛資料分享</h1>
+        <section id="profile" hidden aria-label="目前使用者">
+            <p class="account-row"><span>帳號</span><strong id="current-username"></strong></p>
+            <p class="account-row"><span>角色</span><strong id="current-role"></strong></p>
+            <button id="logout" type="button">登出</button>
+        </section>
+        <section id="workspace" hidden aria-label="交通研究者工作區">
+            <h2>交通研究者工作區</h2>
+            <p>研究車流與交通行為</p>
+            <p class="preview-notice">介面展示：以下內容與操作尚未連接資料查詢、申請、審核或 OTP 服務。</p>
+            <ul class="access-list"><li>只能依時間查詢</li><li>時間粗化、位置與速度模糊</li><li>車牌假名化，使用完整 PETs</li></ul>
+            
+            <div class="role-grid">
+<section class="feature-card">
+<h3>研究資料</h3>
+<p>取得經隱私處理的研究資料，不提供指定車牌查詢。</p>
+<label for="researcher-0-0">開始時間</label>
+<input id="researcher-0-0" type="datetime-local">
+<label for="researcher-0-1">結束時間</label>
+<input id="researcher-0-1" type="datetime-local">
+<div class="preview-actions"><button type="button" data-preview>查看研究資料</button></div>
+
+</section>
+            </div>
+        </section>
+        <p id="message" role="status" aria-live="polite">正在驗證登入身份…</p>
+        <noscript>請啟用 JavaScript 以驗證登入身份。</noscript>
+    </main>
+</body>
+</html>

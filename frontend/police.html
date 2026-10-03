@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>警方工作區｜零信任車輛資料分享</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="app.js" defer></script>
+</head>
+<body data-role="police">
+    <main class="dashboard">
+        <h1>零信任車輛資料分享</h1>
+        <section id="profile" hidden aria-label="目前使用者">
+            <p class="account-row"><span>帳號</span><strong id="current-username"></strong></p>
+            <p class="account-row"><span>角色</span><strong id="current-role"></strong></p>
+            <button id="logout" type="button">登出</button>
+        </section>
+        <section id="workspace" hidden aria-label="警方工作區">
+            <h2>警方工作區</h2>
+            <p>肇逃、事故案件調查</p>
+            <p class="preview-notice">介面展示：以下內容與操作尚未連接資料查詢、申請、審核或 OTP 服務。</p>
+            <ul class="access-list"><li>依案件查詢指定車牌、時間與位置</li><li>時間精準，位置與速度預設模糊</li><li>Email OTP 驗證後依案件授權解鎖</li></ul>
+            
+            <div class="role-grid">
+<section class="feature-card">
+<h3>案件資料查詢</h3>
+<p>填寫案件編號與查詢條件。</p>
+<label for="police-0-0">案件編號</label>
+<input id="police-0-0" type="text" placeholder="請輸入案件編號">
+<label for="police-0-1">車牌</label>
+<input id="police-0-1" type="text" placeholder="請輸入車牌">
+<label for="police-0-2">開始時間</label>
+<input id="police-0-2" type="datetime-local">
+<label for="police-0-3">結束時間</label>
+<input id="police-0-3" type="datetime-local">
+<label for="police-0-4">位置</label>
+<input id="police-0-4" type="text" placeholder="請輸入位置">
+<div class="preview-actions"><button type="button" data-preview>查詢案件</button></div>
+
+</section>
+<section class="feature-card">
+<h3>案件授權驗證</h3>
+<p>驗證 Email OTP 後查看案件授權欄位。</p>
+<label for="police-1-0">案件編號</label>
+<input id="police-1-0" type="text" placeholder="請輸入案件編號">
+<label for="police-1-1">Email OTP</label>
+<input id="police-1-1" type="text" placeholder="請輸入Email OTP">
+<div class="preview-actions"><button type="button" data-preview>驗證 OTP</button>
+<button type="button" data-preview>申請 Email OTP</button></div>
+
+</section>
+            </div>
+        </section>
+        <p id="message" role="status" aria-live="polite">正在驗證登入身份…</p>
+        <noscript>請啟用 JavaScript 以驗證登入身份。</noscript>
+    </main>
+</body>
+</html>

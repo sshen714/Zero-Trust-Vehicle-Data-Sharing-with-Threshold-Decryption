@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系統管理者工作區｜零信任車輛資料分享</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="app.js" defer></script>
+</head>
+<body data-role="admin">
+    <main class="dashboard">
+        <h1>零信任車輛資料分享</h1>
+        <section id="profile" hidden aria-label="目前使用者">
+            <p class="account-row"><span>帳號</span><strong id="current-username"></strong></p>
+            <p class="account-row"><span>角色</span><strong id="current-role"></strong></p>
+            <button id="logout" type="button">登出</button>
+        </section>
+        <section id="workspace" hidden aria-label="系統管理者工作區">
+            <h2>系統管理者工作區</h2>
+            <p>維護帳號、網站、API、資料庫與日誌</p>
+            <p class="preview-notice">介面展示：以下內容與操作尚未連接資料查詢、申請、審核或 OTP 服務。</p>
+            <ul class="access-list"><li>可依車牌、時間、位置與速度查詢</li><li>位置與速度預設模糊</li><li>A OTP 解鎖位置；B OTP 解鎖速度</li></ul>
+            <div class="metric-grid"><div class="metric-card"><span>網站狀態</span><strong>—</strong><small>尚未載入資料</small></div>
+<div class="metric-card"><span>API 狀態</span><strong>—</strong><small>尚未載入資料</small></div>
+<div class="metric-card"><span>資料庫狀態</span><strong>—</strong><small>尚未載入資料</small></div></div>
+            <div class="role-grid">
+<section class="feature-card">
+<h3>帳號管理</h3>
+<p>查看帳號、身份與啟用狀態。</p>
+<label for="admin-0-0">帳號</label>
+<input id="admin-0-0" type="text" placeholder="請輸入帳號">
+<div class="preview-actions"><button type="button" data-preview>查看帳號</button></div>
+
+</section>
+<section class="feature-card">
+<h3>服務與日誌</h3>
+<p>查看網站、API 及資料庫運作狀態。</p>
+
+<div class="preview-actions"><button type="button" data-preview>查看服務日誌</button></div>
+
+</section>
+<section class="feature-card">
+<h3>資料查詢</h3>
+<p>依條件查看資料並申請精準欄位。</p>
+<label for="admin-2-0">車牌</label>
+<input id="admin-2-0" type="text" placeholder="請輸入車牌">
+<label for="admin-2-1">開始時間</label>
+<input id="admin-2-1" type="datetime-local">
+<label for="admin-2-2">結束時間</label>
+<input id="admin-2-2" type="datetime-local">
+<label for="admin-2-3">位置</label>
+<input id="admin-2-3" type="text" placeholder="請輸入位置">
+<label for="admin-2-4">速度</label>
+<input id="admin-2-4" type="text" placeholder="請輸入速度">
+<div class="preview-actions"><button type="button" data-preview>查詢資料</button>
+<button type="button" data-preview>申請 OTP</button></div>
+
+</section>
+            </div>
+        </section>
+        <p id="message" role="status" aria-live="polite">正在驗證登入身份…</p>
+        <noscript>請啟用 JavaScript 以驗證登入身份。</noscript>
+    </main>
+</body>
+</html>

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>車主工作區｜零信任車輛資料分享</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="app.js" defer></script>
+</head>
+<body data-role="owner">
+    <main class="dashboard">
+        <h1>零信任車輛資料分享</h1>
+        <section id="profile" hidden aria-label="目前使用者">
+            <p class="account-row"><span>帳號</span><strong id="current-username"></strong></p>
+            <p class="account-row"><span>角色</span><strong id="current-role"></strong></p>
+            <button id="logout" type="button">登出</button>
+        </section>
+        <section id="workspace" hidden aria-label="車主工作區">
+            <h2>車主工作區</h2>
+            <p>查詢自己的車牌資料</p>
+            <p class="preview-notice">介面展示：以下內容與操作尚未連接資料查詢、申請、審核或 OTP 服務。</p>
+            <ul class="access-list"><li>只能查詢本人綁定的車牌</li></ul>
+            
+            <div class="role-grid">
+<section class="feature-card">
+<h3>我的車牌資料</h3>
+<p>車牌由本人綁定資料帶入，不能輸入其他車牌。</p>
+<label for="owner-0-0">車牌</label>
+<input id="owner-0-0" type="text" readonly placeholder="尚未載入本人車牌">
+<div class="preview-actions"><button type="button" data-preview>查詢我的資料</button></div>
+<p class="query-placeholder">查詢結果將顯示於此。</p>
+</section>
+            </div>
+        </section>
+        <p id="message" role="status" aria-live="polite">正在驗證登入身份…</p>
+        <noscript>請啟用 JavaScript 以驗證登入身份。</noscript>
+    </main>
+</body>
+</html>
