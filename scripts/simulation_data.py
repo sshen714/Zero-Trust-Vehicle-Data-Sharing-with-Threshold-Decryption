@@ -99,7 +99,7 @@ def save_raw_database(df, table_name="encrypted_trajectories"):
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
     from backend.database import engine
-    from encryption import encrypt_dataframe
+    from scripts.encryption import encrypt_dataframe
     lat, lng = to_ll(
         df.x.values,
         df.y.values
