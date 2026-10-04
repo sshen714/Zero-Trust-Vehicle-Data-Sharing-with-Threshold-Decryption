@@ -1,4 +1,4 @@
-"""SQLAlchemy ORM models for users and roles."""
+"""SQLAlchemy ORM models for accounts and vehicle-data workflows."""
 
 from __future__ import annotations
 
@@ -6,7 +6,18 @@ from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Enum, Integer, Numeric, String, ForeignKey, func
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .database import Base
@@ -51,8 +62,22 @@ class User(Base):
     )
 
 
+class Vehicle(Base):
+    """A vehicle known to the system, independent of its current owner."""
+
+    __tablename__ = "vehicles"
+
+    vehicle_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    plate_lookup: Mapped[str | None] = mapped_column(
+        String(64), unique=True, index=True, nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), nullable=False
+    )
+
+
 class RawTrajectory(Base):
-    """Simulated vehicle trajectories; all table definitions live in this module."""
+    """Plain simulated input retained only for development and demonstrations."""
 
     __tablename__ = "raw_trajectories"
     __table_args__ = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"}
@@ -67,14 +92,32 @@ class RawTrajectory(Base):
     speed_kmh: Mapped[Decimal | None] = mapped_column(Numeric(8, 1), nullable=True)
 
 
+class EncryptedTrajectory(Base):
+    """Encrypted trajectory records used by the protected data workflow."""
+
+    __tablename__ = "encrypted_trajectories"
+    __table_args__ = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"}
+
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True
+    )
+    plate_enc: Mapped[str] = mapped_column(Text, nullable=False)
+    plate_lookup: Mapped[str] = mapped_column(String(64), index=True, nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, index=True, nullable=False)
+    location_enc: Mapped[str] = mapped_column(Text, nullable=False)
+    speed_enc: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class VehicleOwnership(Base):
-    """Vehicle-to-owner mapping only; trajectories remain in raw_trajectories."""
+    """Map an owner account to a vehicle without duplicating account data."""
 
     __tablename__ = "vehicle_ownerships"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    vehicle_id: Mapped[str] = mapped_column(String(32), unique=True, nullable=False)
+    vehicle_id: Mapped[str] = mapped_column(
+        ForeignKey("vehicles.vehicle_id"), unique=True, nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )
