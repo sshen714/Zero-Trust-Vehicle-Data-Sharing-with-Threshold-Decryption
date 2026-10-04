@@ -6,3 +6,10 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .demo-accounts.json
+
+backend/gmail-credentials.json
+
+backend/gmail-token.json
+
+backend/gmail-credentials*.json
+backend/gmail-token.tmp

@@ -18,7 +18,7 @@ from scripts.decryption import decrypt_location, decrypt_speed
 from scripts.encryption import make_plate_lookup
 from scripts.pets import apply_owner_pets, apply_researcher_pets
 from .database import required_setting
-from .mailer import OtpDeliveryError, send_download_otp
+from .mailer import OtpDeliveryError, otp_recipient, send_download_otp
 from .dependencies import CurrentUser, DbSession, require_roles
 from .models import (
     DataRequest,
@@ -942,7 +942,7 @@ def submit_personal_download_request(
     if user.role == Role.OWNER:
         try:
             db.flush()
-            send_download_otp(user.email, otp)
+            send_download_otp(otp_recipient(user.role.value, user.email), otp)
         except OtpDeliveryError:
             db.rollback()
             raise HTTPException(503, '驗證碼寄送失敗，請確認寄信設定後再試。') from None
@@ -953,7 +953,7 @@ def submit_personal_download_request(
         'request_id': request_row.id,
         'expires_at': expires_at,
         **({'delivery': 'email'} if user.role == Role.OWNER else {'demo_otp': otp}),
-        'recipient_email': user.email,
+        'recipient_email': otp_recipient(user.role.value, user.email),
     }
 
 

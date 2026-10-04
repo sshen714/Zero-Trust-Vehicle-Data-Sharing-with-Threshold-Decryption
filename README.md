@@ -398,7 +398,7 @@ PYCODE
 
 ## 10. Email OTP 實作進度：車主
 
-車主的本人下載申請已改為 SMTP 寄送 OTP 到 `users.email`，API 不再回傳車主的原始驗證碼。其他角色目前維持 Demo OTP。驗證碼仍為六位數、五分鐘有效，驗證成功才下載 CSV；寄信失敗回傳 503，並回滾本次申請與 OTP 紀錄。
+車主的本人下載申請已改為 SMTP 寄送 OTP 到指定收件地址（未覆寫時使用 `users.email`），API 不再回傳車主的原始驗證碼。其他角色目前維持 Demo OTP。驗證碼仍為六位數、五分鐘有效，驗證成功才下載 CSV；寄信失敗回傳 503，並回滾本次申請與 OTP 紀錄。
 
 在本機 `backend/.env` 設定 `SMTP_HOST`、`SMTP_PORT`、`SMTP_SECURITY`、`SMTP_USERNAME`、`SMTP_PASSWORD` 與 `SMTP_FROM`。設定範例見 `backend/.env.example`；使用 `starttls` 或 `ssl` 加密連線。設定完成後重啟後端，確認車主帳號的 email 是可收信的真實地址，再申請下載並輸入信中的驗證碼。SMTP 服務接受郵件不代表已送達收件匣，必要時檢查垃圾郵件與寄信服務紀錄。
 
@@ -407,3 +407,18 @@ PYCODE
 ```bash
 python -m unittest discover -s tests -v
 ```
+
+本機測試可透過 `OTP_SUPERVISOR_A_EMAIL`、`OTP_SUPERVISOR_B_EMAIL` 與 `OTP_DEFAULT_EMAIL` 覆寫收件地址，留白時使用帳號 email。這些設定不修改帳號 email 的唯一性；目前只有車主流程實際寄信，其餘角色仍為 Demo。
+
+### Gmail API 寄信授權
+
+本機改用 `MAIL_PROVIDER=gmail`，不需要 SMTP 密碼。OAuth 電腦版用戶端 JSON 放在 `backend/gmail-credentials.json`，寄件帳號由 `GMAIL_SENDER` 設定。
+
+```bash
+source .venv/bin/activate
+python scripts/authorize_gmail.py
+```
+
+開啟工具印出的網址，以寄件帳號授予 `gmail.send` 權限。工具只完成授權，不寄信；成功後儲存 `backend/gmail-token.json`（已被 Git 忽略）。重啟後端後再用車主頁申請 OTP。
+
+授權工具監聽 `127.0.0.1:8765`，瀏覽器應在同一台機器。若使用 Windows 瀏覽器與 Linux VM，可透過 SSH 將 Windows 的本機 8765 埠轉送至 Linux 的 loopback 8765 埠；單純 NAT 轉送至客體網卡無法連到此監聽位址。
