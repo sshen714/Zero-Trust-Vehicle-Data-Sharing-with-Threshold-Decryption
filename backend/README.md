@@ -94,6 +94,7 @@ police
 | `vehicle_ownerships` | 車主帳號與車輛的唯一綁定關係 |
 | `encrypted_trajectories` | 車牌、位置與速度分欄加密後的軌跡資料，時間保持明文 |
 | `data_requests` | 廠商使用目的及主管 A、B 的獨立決定與審核者 |
+| `otp_challenges` | 申請對應的 OTP 雜湊、期限、錯誤次數與使用狀態，不保存 OTP 明文 |
 
 `models.py` 是資料表結構的唯一 ORM 定義來源。`create_all()` 只建立缺少的資料表，不會修改既有欄位或刪除資料；既有資料表的結構變更使用 `migrations/` 中的 SQL。
 

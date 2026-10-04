@@ -142,7 +142,7 @@ python scripts/create_table.py
 ```
 
 建表入口統一放在 `scripts/create_table.py`，使用 `backend/.env` 的資料庫設定。
-五張資料表的結構統一定義在 `backend/models.py`，建表腳本只負責執行建立。
+六張資料表的結構統一定義在 `backend/models.py`，建表腳本只負責執行建立。
 腳本可重複執行，不會刪除資料，也不會變更既有欄位；欄位變更仍需 migration。
 
 在專案根目錄執行：
@@ -241,7 +241,7 @@ vehicle_data_sharing.encrypted_trajectories
 
 此版本使用三把獨立的 AES-256-GCM 金鑰分欄保護車牌、位置與速度。授權設計不採用門檻解密或主管 A、B 共同重建金鑰：主管 A 負責精準位置的授權，主管 B 負責精準速度的授權，兩種資料各自驗證，不要求兩位主管同時同意。Email OTP、授權範圍、有效期限、撤銷流程與警方授權驗證仍待實作。資料筆數少時，彙總值仍不等同匿名化保證。
 
-交通統計及每日分析使用 `encrypted_trajectories`，後端只在記憶體中解密計算所需欄位。車主使用 `GET /workspace/trajectories` 輸入車牌；後端計算 `plate_lookup`、檢查 `vehicle_ownerships`，再查詢加密軌跡。時間條件可省略，若提供則包含起訖端點且不帶時區。位置 CSV 會在記憶體副本中切分行程，每趟首尾至少移除 200～500 公尺及 1 分鐘；每趟行程的經緯度分別使用由伺服器密鑰穩定產生、介於 `±0.0005°` 的固定偏移，使近似軌跡保留相對移動且不公開上下限。時間篩選在 PETs 處理後才套用。速度 CSV 採 10 km/h 區間（不含上限）。處理過程不會回寫或修改 `encrypted_trajectories`。資料申請使用 `data_requests`。五張資料表統一定義於 `backend/models.py`，由 `scripts/create_table.py` 建立。
+交通統計及每日分析使用 `encrypted_trajectories`，後端只在記憶體中解密計算所需欄位。車主使用 `GET /workspace/trajectories` 輸入車牌；後端計算 `plate_lookup`、檢查 `vehicle_ownerships`，再查詢加密軌跡。時間條件可省略，若提供則包含起訖端點且不帶時區。位置 CSV 會在記憶體副本中切分行程，每趟首尾至少移除 200～500 公尺及 1 分鐘；每趟行程的經緯度分別使用由伺服器密鑰穩定產生、介於 `±0.0005°` 的固定偏移，使近似軌跡保留相對移動且不公開上下限。時間篩選在 PETs 處理後才套用。速度 CSV 採 10 km/h 區間（不含上限）。處理過程不會回寫或修改 `encrypted_trajectories`。資料申請使用 `data_requests`，OTP 驗證狀態使用只保存雜湊的 `otp_challenges`。六張資料表統一定義於 `backend/models.py`，由 `scripts/create_table.py` 建立。
 
 合作廠商使用 `GET /workspace/vendor/trajectories` 依車牌與必填時間範圍下載資料。位置 CSV 套用與車主分離的固定 PETs 偏移並去除行程首尾；速度 CSV 回傳解密後的精準速度。兩種 CSV 都不包含車牌、`plate_lookup` 或密文。目前只完成右側查詢下載，尚未強制連結左側申請與主管核准。
 

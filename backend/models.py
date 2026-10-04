@@ -117,3 +117,34 @@ class DataRequest(Base):
     reviewer_a: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     reviewer_b: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class OtpChallenge(Base):
+    """Store a one-time-code hash and its verification lifecycle."""
+
+    __tablename__ = "otp_challenges"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    request_id: Mapped[int] = mapped_column(
+        ForeignKey("data_requests.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    otp_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True, nullable=False)
+    attempt_count: Mapped[int] = mapped_column(
+        default=0,
+        server_default="0",
+        nullable=False,
+    )
+    max_attempts: Mapped[int] = mapped_column(
+        default=5,
+        server_default="5",
+        nullable=False,
+    )
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        server_default=func.now(),
+        nullable=False,
+    )
