@@ -1,12 +1,21 @@
 """Role-specific data and independent approval endpoints."""
 from datetime import datetime
 from decimal import Decimal, ROUND_FLOOR
+from statistics import fmean
 from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field, ConfigDict
-from sqlalchemy import select, func, text
+from sqlalchemy import select, func
+from scripts.decryption import decrypt_location, decrypt_speed
 from .dependencies import CurrentUser, DbSession, require_roles
-from .models import Role, User, DataRequest, VehicleOwnership, RawTrajectory
+from .models import (
+    DataRequest,
+    EncryptedTrajectory,
+    Role,
+    User,
+    Vehicle,
+    VehicleOwnership,
+)
 
 router = APIRouter(prefix='/workspace')
 LABELS = {Role.OWNER: ('車主', '提供車輛資料'), Role.VISITOR: ('訪客', '查看交通概況'), Role.VENDOR: ('合作廠商', '分析事故或交通資料'), Role.SUPERVISOR_A: ('主管 A', '審核資料使用目的'), Role.SUPERVISOR_B: ('主管 B', '獨立審核申請'), Role.ADMIN: ('系統管理者', '維護網站與服務')}
@@ -20,10 +29,34 @@ def request_view(row):
     return dict(id=row.id, vendor_id=row.vendor_id, purpose=row.purpose, decision_a=row.decision_a, decision_b=row.decision_b, status=state, created_at=row.created_at)
 
 def traffic_summary(db):
-    total, avg, slow = db.execute(text(
-        "SELECT COUNT(*), AVG(speed_kmh), SUM(speed_kmh < 20) FROM raw_trajectories"
-    )).one()
-    return dict(record_count=total, average_speed_kmh=round(float(avg), 1) if avg is not None else None, slow_record_count=int(slow or 0))
+    speeds = [
+        decrypt_speed(speed_enc)
+        for speed_enc in db.scalars(select(EncryptedTrajectory.speed_enc))
+    ]
+    return dict(
+        record_count=len(speeds),
+        average_speed_kmh=round(fmean(speeds), 1) if speeds else None,
+        slow_record_count=sum(speed < 20 for speed in speeds),
+    )
+
+
+def daily_traffic_analysis(db):
+    daily_speeds = {}
+    rows = db.execute(select(
+        EncryptedTrajectory.timestamp,
+        EncryptedTrajectory.speed_enc,
+    ))
+    for timestamp, speed_enc in rows:
+        daily_speeds.setdefault(timestamp.date(), []).append(decrypt_speed(speed_enc))
+
+    return [
+        dict(
+            date=str(day),
+            record_count=len(speeds),
+            average_speed_kmh=round(fmean(speeds), 1),
+        )
+        for day, speeds in sorted(daily_speeds.items(), reverse=True)[:30]
+    ]
 
 
 @router.get('')
@@ -53,12 +86,15 @@ def workspace(db: DbSession, user: CurrentUser, response: Response):
             approved = db.scalar(select(DataRequest.id).where(DataRequest.vendor_id == user.id, DataRequest.decision_a == 'approved', DataRequest.decision_b == 'approved').limit(1))
             if approved is not None:
                 result['analysis'] = traffic_summary(db)
-                result['daily_analysis'] = [dict(date=str(day), record_count=count, average_speed_kmh=round(float(speed), 1) if speed is not None else None) for day, count, speed in db.execute(text(
-                    "SELECT DATE(timestamp), COUNT(*), AVG(speed_kmh) FROM raw_trajectories "
-                    "GROUP BY DATE(timestamp) ORDER BY DATE(timestamp) DESC LIMIT 30"
-                ))]
+                result['daily_analysis'] = daily_traffic_analysis(db)
     elif user.role == Role.ADMIN:
-        result['service'] = dict(user_count=db.scalar(select(func.count(User.id))), vehicle_record_count=db.scalar(text("SELECT COUNT(*) FROM raw_trajectories")), request_count=db.scalar(select(func.count(DataRequest.id))))
+        result['service'] = dict(
+            user_count=db.scalar(select(func.count(User.id))),
+            vehicle_record_count=db.scalar(
+                select(func.count(EncryptedTrajectory.id))
+            ),
+            request_count=db.scalar(select(func.count(DataRequest.id))),
+        )
         result['users'] = [dict(id=u.id, username=u.username, role=u.role, is_active=u.is_active) for u in db.scalars(select(User).order_by(User.id).limit(100))]
     else:
         result['notice'] = '此身份已加入，資料查詢功能尚未實作。'
@@ -71,6 +107,17 @@ def blurred_range(value, step):
     step = Decimal(step)
     lower = (Decimal(value) / step).to_integral_value(rounding=ROUND_FLOOR) * step
     return f"{lower:f} 至 {lower + step:f}（不含上限）"
+
+
+def owner_trajectory_view(row, vehicle_id):
+    location = decrypt_location(row.location_enc)
+    return dict(
+        vehicle_id=vehicle_id,
+        timestamp=row.timestamp,
+        latitude_range=blurred_range(location['lat'], '0.01'),
+        longitude_range=blurred_range(location['lng'], '0.01'),
+        speed_range=blurred_range(decrypt_speed(row.speed_enc), '10'),
+    )
 
 
 @router.get('/trajectories')
@@ -88,25 +135,30 @@ def owner_trajectories(
         raise HTTPException(422, 'Use local timestamps without a timezone offset')
     if start > end:
         raise HTTPException(422, 'Start must not be later than end')
-    binding = db.scalar(select(VehicleOwnership.id).where(
-        VehicleOwnership.owner_id == user.id,
-        VehicleOwnership.vehicle_id == vehicle_id,
-    ))
+    binding = db.execute(
+        select(VehicleOwnership.id, Vehicle.plate_lookup)
+        .join(Vehicle, Vehicle.vehicle_id == VehicleOwnership.vehicle_id)
+        .where(
+            VehicleOwnership.owner_id == user.id,
+            VehicleOwnership.vehicle_id == vehicle_id,
+        )
+    ).one_or_none()
     if binding is None:
         raise HTTPException(403, 'Vehicle is not bound to this account')
-    rows = db.scalars(select(RawTrajectory).where(
-        RawTrajectory.vehicle_id == vehicle_id,
-        RawTrajectory.timestamp >= start,
-        RawTrajectory.timestamp <= end,
-    ).order_by(RawTrajectory.timestamp, RawTrajectory.id).offset(offset).limit(101)).all()
+    _, plate_lookup = binding
+    if plate_lookup is None:
+        raise HTTPException(409, 'Vehicle has no encrypted trajectory lookup value')
+    rows = db.scalars(select(EncryptedTrajectory).where(
+        EncryptedTrajectory.plate_lookup == plate_lookup,
+        EncryptedTrajectory.timestamp >= start,
+        EncryptedTrajectory.timestamp <= end,
+    ).order_by(
+        EncryptedTrajectory.timestamp,
+        EncryptedTrajectory.id,
+    ).offset(offset).limit(101)).all()
     return dict(
         offset=offset, page_size=100, has_more=len(rows) > 100,
-        records=[dict(
-            vehicle_id=row.vehicle_id, timestamp=row.timestamp,
-            latitude_range=blurred_range(row.lat, '0.01'),
-            longitude_range=blurred_range(row.lng, '0.01'),
-            speed_range=blurred_range(row.speed_kmh, '10'),
-        ) for row in rows[:100]],
+        records=[owner_trajectory_view(row, vehicle_id) for row in rows[:100]],
     )
 
 class RequestInput(BaseModel):

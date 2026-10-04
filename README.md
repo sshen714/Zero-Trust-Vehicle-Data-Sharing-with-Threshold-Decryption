@@ -142,7 +142,7 @@ python scripts/create_table.py
 ```
 
 建表入口統一放在 `scripts/create_table.py`，使用 `backend/.env` 的資料庫設定。
-四張資料表的結構統一定義在 `backend/models.py`，建表腳本只負責執行建立。
+五張資料表的結構統一定義在 `backend/models.py`，建表腳本只負責執行建立。
 腳本可重複執行，不會刪除資料，也不會變更既有欄位；欄位變更仍需 migration。
 
 在專案根目錄執行：
@@ -169,7 +169,7 @@ source .venv/bin/activate
 python scripts/simulation_data.py
 ```
 
-模擬程式透過 `backend/database.py` 使用 `DB_NAME` 指定的資料庫，並將資料寫入 `raw_trajectories` 資料表。
+模擬程式先將車輛識別碼、位置與速度加密，再透過 `backend/database.py` 使用 `DB_NAME` 指定的資料庫，將結果寫入 `encrypted_trajectories`。`vehicles` 只保存不透明內部 ID 與 HMAC 查詢碼，不保存解密後的車牌。
 
 可進入 MySQL 確認資料：
 
@@ -180,8 +180,8 @@ sudo mysql
 ```sql
 USE vehicle_data_sharing;
 SHOW TABLES;
-SELECT * FROM raw_trajectories LIMIT 10;
-SELECT COUNT(*) FROM raw_trajectories;
+SELECT id, plate_lookup, timestamp FROM encrypted_trajectories LIMIT 10;
+SELECT COUNT(*) FROM encrypted_trajectories;
 ```
 
 ## 6. 啟動前端
@@ -205,11 +205,13 @@ http://127.0.0.1:5500/login.html
 ```text
 scripts/simulation_data.py
         ↓
+scripts/encryption.py
+        ↓
 backend/database.py
         ↓
 MySQL
         ↓
-vehicle_data_sharing.raw_trajectories
+vehicle_data_sharing.encrypted_trajectories
 ```
 
 ## 7. 八種身份與測試帳號
@@ -220,7 +222,7 @@ vehicle_data_sharing.raw_trajectories
 
 八種身份的介面分別位於 `frontend/owner.html`、`visitor.html`、`vendor.html`、`supervisor_a.html`、`supervisor_b.html`、`admin.html`、`researcher.html`、`police.html`。`index.html` 只負責登入後導頁，`app.js` 處理共用登入驗證與展示按鈕，不產生角色畫面。
 
-目前先製作八種身份的前端展示畫面。登入仍呼叫 `/auth/login` 與 `/auth/me` 驗證身份；工作區不呼叫 `/workspace`、歷史軌跡、申請或審核 API。畫面的資料權限文字是預定設計，並不表示 OTP、PETs 或查詢流程已完成。操作按鈕只顯示展示提示，不會查詢、上傳或儲存資料。
+目前先製作八種身份的前端展示畫面。登入呼叫 `/auth/login` 與 `/auth/me` 驗證身份，角色頁會呼叫 `/workspace` 載入工作區基本資料；歷史軌跡、申請及審核操作尚未由前端呼叫。操作按鈕只顯示展示提示，不會查詢、上傳或儲存資料。
 
 | 身份 | 測試帳號 | 目前展示的畫面 |
 | --- | --- | --- |
@@ -239,4 +241,4 @@ vehicle_data_sharing.raw_trajectories
 
 此版本為角色權限與雙人審核的第一階段：分析授權是帳號層級、無到期時間，只提供去除個別車輛識別的交通統計；研究者與警方查詢、其他身份的時間區間篩選與位置／速度模糊化、Email OTP、事故分析、正式的授權範圍／撤銷流程、門檻解密及網站維護操作尚未實作。資料筆數少時，彙總值仍不等同匿名化保證。
 
-交通統計及每日分析使用既有的模擬資料表 `raw_trajectories`。後端工作區 API 依登入帳號從 `vehicle_ownerships` 取得綁定車輛，車主可使用 `GET /workspace/trajectories` 查詢自己的綁定車輛；起訖時間均包含端點，時間不帶時區且依資料庫記錄解讀，每頁 100 筆。時間保留原值、經緯度採 0.01° 區間、速度採 10 km/h 區間（皆不含上限），不回傳原始位置與速度。這是固定區間模糊化，並非差分隱私或門檻解密。資料申請使用 `data_requests`。四張資料表（含 `users`）統一定義於 `backend/models.py`，由 `scripts/create_table.py` 建立。
+交通統計及每日分析使用 `encrypted_trajectories`，後端只在記憶體中解密計算所需的速度。後端工作區 API 依登入帳號從 `vehicle_ownerships` 取得綁定車輛，再以 `vehicles.plate_lookup` 查詢加密軌跡；車主可使用 `GET /workspace/trajectories` 查詢自己的綁定車輛。起訖時間均包含端點，時間不帶時區且依資料庫記錄解讀，每頁 100 筆。位置與速度解密後，經緯度採 0.01° 區間、速度採 10 km/h 區間（皆不含上限），不回傳精準值。資料申請使用 `data_requests`。五張資料表統一定義於 `backend/models.py`，由 `scripts/create_table.py` 建立。
