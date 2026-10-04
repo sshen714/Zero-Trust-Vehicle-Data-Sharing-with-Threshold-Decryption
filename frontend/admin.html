@@ -39,15 +39,19 @@
 <section class="feature-card">
 <h3>資料查詢</h3>
 <p>依條件查看資料。</p>
-<label for="admin-2-4">速度</label>
-<input id="admin-2-4" type="text" placeholder="請輸入速度">
-<label for="admin-2-0">車牌</label>
-<input id="admin-2-0" type="text" placeholder="請輸入車牌">
-<label for="admin-2-1">開始時間</label>
-<input id="admin-2-1" type="datetime-local">
-<label for="admin-2-2">結束時間</label>
-<input id="admin-2-2" type="datetime-local">
-<div class="preview-actions"><button type="button" data-preview>查詢資料</button></div>
+<p>車牌與速度範圍至少填寫一項；速度下限與上限必須一起填寫。</p>
+<div class="input-pair">
+<div><label for="admin-min-speed">速度下限（km/h）</label><input id="admin-min-speed" type="number" min="0" max="300" step="0.1" placeholder="例如 20"></div>
+<div><label for="admin-max-speed">速度上限（km/h）</label><input id="admin-max-speed" type="number" min="0" max="300" step="0.1" placeholder="例如 60"></div>
+</div>
+<label for="admin-query-plate">車牌</label>
+<input id="admin-query-plate" type="text" maxlength="32" autocomplete="off" placeholder="例如 V00000">
+<p id="admin-available-range">正在載入可查詢時間…</p>
+<label for="admin-query-start">開始時間</label>
+<input id="admin-query-start" type="datetime-local" step="1">
+<label for="admin-query-end">結束時間</label>
+<input id="admin-query-end" type="datetime-local" step="1">
+<div class="preview-actions"><button id="admin-query-download" type="button">查詢資料</button></div>
 
 </section>
 <section class="feature-card">

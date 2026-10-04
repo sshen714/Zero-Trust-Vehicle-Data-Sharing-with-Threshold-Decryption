@@ -188,6 +188,17 @@ def workspace(db: DbSession, user: CurrentUser, response: Response):
             vehicle_count=db.scalar(select(func.count(Vehicle.vehicle_id))),
             role_count=db.scalar(select(func.count(func.distinct(User.role)))),
         )
+        available_start, available_end = db.execute(
+            select(
+                func.min(EncryptedTrajectory.timestamp),
+                func.max(EncryptedTrajectory.timestamp),
+            )
+        ).one()
+        result['available_time_range'] = (
+            dict(start=available_start, end=available_end)
+            if available_start is not None and available_end is not None
+            else None
+        )
         result['users'] = [dict(id=u.id, username=u.username, role=u.role, is_active=u.is_active) for u in db.scalars(select(User).order_by(User.id).limit(100))]
     else:
         result['notice'] = '此身份已加入，資料查詢功能尚未實作。'
@@ -215,6 +226,15 @@ def vendor_pet_rng(plate_lookup):
     seed_bytes = hmac.new(
         required_setting('LOCATION_KEY').encode('utf-8'),
         f'vendor-location-pets|{plate_lookup}'.encode('ascii'),
+        hashlib.sha256,
+    ).digest()
+    return np.random.default_rng(int.from_bytes(seed_bytes[:8], 'big'))
+
+
+def admin_pet_rng(plate_lookup):
+    seed_bytes = hmac.new(
+        required_setting('LOCATION_KEY').encode('utf-8'),
+        f'admin-location-pets|{plate_lookup}'.encode('ascii'),
         hashlib.sha256,
     ).digest()
     return np.random.default_rng(int.from_bytes(seed_bytes[:8], 'big'))
@@ -508,6 +528,122 @@ def supervisor_b_speeds(
         headers={
             'Cache-Control': 'no-store',
             'Content-Disposition': 'attachment; filename="supervisor-b-speeds.csv"',
+        },
+    )
+
+
+@router.get('/admin/trajectories')
+def admin_trajectories(
+    db: DbSession,
+    user: Annotated[User, Depends(require_roles(Role.ADMIN))],
+    start: datetime,
+    end: datetime,
+    plate: Annotated[str | None, Query(max_length=32)] = None,
+    min_speed: Annotated[float | None, Query(ge=0, le=300)] = None,
+    max_speed: Annotated[float | None, Query(ge=0, le=300)] = None,
+) -> Response:
+    if start.tzinfo is not None or end.tzinfo is not None:
+        raise HTTPException(422, 'Use local timestamps without a timezone offset')
+    if start > end:
+        raise HTTPException(422, 'Start must not be later than end')
+
+    plate = plate.strip() if plate is not None else ''
+    has_speed_range = min_speed is not None and max_speed is not None
+    if (min_speed is None) != (max_speed is None):
+        raise HTTPException(422, 'Both minimum and maximum speed are required')
+    if not plate and not has_speed_range:
+        raise HTTPException(422, 'Plate or speed range is required')
+    if has_speed_range and min_speed > max_speed:
+        raise HTTPException(422, 'Minimum speed must not exceed maximum speed')
+
+    conditions = []
+    if plate:
+        plate_lookup = make_plate_lookup(plate)
+        vehicle_exists = db.scalar(
+            select(Vehicle.vehicle_id).where(Vehicle.plate_lookup == plate_lookup)
+        )
+        if vehicle_exists is None:
+            raise HTTPException(404, 'Vehicle is not available')
+        conditions.append(EncryptedTrajectory.plate_lookup == plate_lookup)
+
+    rows = list(db.scalars(
+        select(EncryptedTrajectory)
+        .where(*conditions)
+        .order_by(
+            EncryptedTrajectory.plate_lookup,
+            EncryptedTrajectory.timestamp,
+            EncryptedTrajectory.id,
+        )
+    ))
+    rows = list({(row.plate_lookup, row.timestamp): row for row in rows}.values())
+
+    protected_groups = []
+    rows_by_vehicle = {}
+    for row in rows:
+        rows_by_vehicle.setdefault(row.plate_lookup, []).append(row)
+    for plate_lookup, vehicle_rows in rows_by_vehicle.items():
+        location_rows = []
+        for row in vehicle_rows:
+            location = decrypt_location(row.location_enc)
+            exact_speed = decrypt_speed(row.speed_enc)
+            location_rows.append({
+                'vehicle_id': plate_lookup,
+                'timestamp': row.timestamp,
+                'lat': location['lat'],
+                'lng': location['lng'],
+                'speed_kmh': exact_speed,
+                'exact_speed_kmh': exact_speed,
+            })
+        rng = admin_pet_rng(plate_lookup)
+        protected = apply_owner_pets(pd.DataFrame(location_rows), rng=rng)
+        if protected.empty:
+            continue
+        trip_groups = protected['timestamp'].diff().dt.total_seconds().gt(300).cumsum()
+        protected['approximate_latitude'] = protected['lat']
+        protected['approximate_longitude'] = protected['lng']
+        for _, indexes in protected.groupby(trip_groups, sort=False).groups.items():
+            protected.loc[indexes, 'approximate_latitude'] += rng.uniform(-0.0005, 0.0005)
+            protected.loc[indexes, 'approximate_longitude'] += rng.uniform(-0.0005, 0.0005)
+        protected_groups.append(protected)
+
+    protected = (
+        pd.concat(protected_groups, ignore_index=True)
+        if protected_groups else pd.DataFrame()
+    )
+    if not protected.empty:
+        protected = protected[
+            (protected['timestamp'] >= start)
+            & (protected['timestamp'] <= end)
+        ]
+        if has_speed_range:
+            protected = protected[
+                (protected['exact_speed_kmh'] >= min_speed)
+                & (protected['exact_speed_kmh'] <= max_speed)
+            ]
+        protected = protected.sort_values('timestamp')
+
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'timestamp',
+        'approximate_latitude',
+        'approximate_longitude',
+        'speed_range_kmh',
+    ])
+    for row in protected.itertuples(index=False):
+        writer.writerow([
+            row.timestamp.isoformat(sep=' '),
+            f'{row.approximate_latitude:.6f}',
+            f'{row.approximate_longitude:.6f}',
+            blurred_range(row.exact_speed_kmh, '10'),
+        ])
+
+    return Response(
+        content='\ufeff' + output.getvalue(),
+        media_type='text/csv; charset=utf-8',
+        headers={
+            'Cache-Control': 'no-store',
+            'Content-Disposition': 'attachment; filename="admin-trajectories.csv"',
         },
     )
 

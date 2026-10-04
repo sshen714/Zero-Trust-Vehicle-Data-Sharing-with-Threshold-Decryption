@@ -400,7 +400,7 @@ function initializeSupervisorBWorkspace(token, workspaceData) {
 }
 
 
-function initializeAdminWorkspace(workspaceData) {
+function initializeAdminWorkspace(token, workspaceData) {
     const memberCount = document.getElementById("admin-member-count");
     const vehicleCount = document.getElementById("admin-vehicle-count");
     const roleCount = document.getElementById("admin-role-count");
@@ -422,6 +422,99 @@ function initializeAdminWorkspace(workspaceData) {
     vehicleCount.textContent = String(service.vehicle_count);
     roleCount.textContent = String(service.role_count);
     statusNote.textContent = "統計資料已載入";
+
+    const minSpeedInput = document.getElementById("admin-min-speed");
+    const maxSpeedInput = document.getElementById("admin-max-speed");
+    const plateInput = document.getElementById("admin-query-plate");
+    const startInput = document.getElementById("admin-query-start");
+    const endInput = document.getElementById("admin-query-end");
+    const rangeText = document.getElementById("admin-available-range");
+    const queryButton = document.getElementById("admin-query-download");
+    if (
+        !minSpeedInput || !maxSpeedInput || !plateInput
+        || !startInput || !endInput || !rangeText || !queryButton
+    ) return;
+
+    const availableRange = workspaceData.available_time_range;
+    if (availableRange?.start && availableRange?.end) {
+        const rangeStart = availableRange.start.slice(0, 19);
+        const rangeEnd = availableRange.end.slice(0, 19);
+        for (const input of [startInput, endInput]) {
+            input.min = rangeStart;
+            input.max = rangeEnd;
+        }
+        startInput.value = rangeStart;
+        endInput.value = rangeEnd;
+        rangeText.textContent = `可查詢時間：${displayDateTime(rangeStart)} ～ ${displayDateTime(rangeEnd)}`;
+    } else {
+        rangeText.textContent = "目前沒有可查詢的模擬資料。";
+        queryButton.disabled = true;
+    }
+
+    queryButton.addEventListener("click", async () => {
+        const plate = plateInput.value.trim();
+        const minSpeed = minSpeedInput.value;
+        const maxSpeed = maxSpeedInput.value;
+        const hasMinSpeed = minSpeed !== "";
+        const hasMaxSpeed = maxSpeed !== "";
+        if (!plate && !hasMinSpeed && !hasMaxSpeed) {
+            message.textContent = "請輸入車牌，或填寫速度下限與上限。";
+            return;
+        }
+        if (hasMinSpeed !== hasMaxSpeed) {
+            message.textContent = "速度下限與上限必須一起填寫。";
+            return;
+        }
+        if (hasMinSpeed && Number(minSpeed) > Number(maxSpeed)) {
+            message.textContent = "速度下限不能大於速度上限。";
+            return;
+        }
+        if (!startInput.value || !endInput.value) {
+            message.textContent = "請選擇開始時間與結束時間。";
+            return;
+        }
+        if (startInput.value > endInput.value) {
+            message.textContent = "開始時間不能晚於結束時間。";
+            return;
+        }
+
+        const params = new URLSearchParams({
+            start: startInput.value,
+            end: endInput.value,
+        });
+        if (plate) params.set("plate", plate);
+        if (hasMinSpeed) {
+            params.set("min_speed", minSpeed);
+            params.set("max_speed", maxSpeed);
+        }
+
+        queryButton.disabled = true;
+        message.textContent = "正在篩選、解密並產生模糊資料 CSV…";
+        try {
+            const blob = await authenticatedDownload(
+                `/workspace/admin/trajectories?${params.toString()}`,
+                token,
+            );
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "admin-trajectories.csv";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+            message.textContent = "管理者模糊資料 CSV 已下載。";
+        } catch (error) {
+            if (error.status === 401) {
+                clearSession();
+                location.replace("login.html?reason=session");
+                return;
+            }
+            message.textContent = error.message;
+        } finally {
+            queryButton.disabled = false;
+        }
+    });
 }
 
 
@@ -616,7 +709,7 @@ async function initializeProfilePage(profile) {
         if (user.role === "vendor") initializeVendorWorkspace(token, workspaceData);
         if (user.role === "supervisor_a") initializeSupervisorAWorkspace(token, workspaceData);
         if (user.role === "supervisor_b") initializeSupervisorBWorkspace(token, workspaceData);
-        if (user.role === "admin") initializeAdminWorkspace(workspaceData);
+        if (user.role === "admin") initializeAdminWorkspace(token, workspaceData);
     } catch (error) {
         if (error.status === 401 || error.status === 403) {
             clearSession();
