@@ -1,12 +1,15 @@
 """Role-specific data and independent approval endpoints."""
+import csv
 from datetime import datetime
 from decimal import Decimal, ROUND_FLOOR
+from io import StringIO
 from statistics import fmean
 from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import select, func
 from scripts.decryption import decrypt_location, decrypt_speed
+from scripts.encryption import make_plate_lookup
 from .dependencies import CurrentUser, DbSession, require_roles
 from .models import (
     DataRequest,
@@ -71,6 +74,17 @@ def workspace(db: DbSession, user: CurrentUser, response: Response):
             .order_by(VehicleOwnership.vehicle_id)
         ).all()
         result['vehicles'] = [dict(vehicle_id=vehicle_id) for vehicle_id in vehicles]
+        available_start, available_end = db.execute(
+            select(
+                func.min(EncryptedTrajectory.timestamp),
+                func.max(EncryptedTrajectory.timestamp),
+            )
+        ).one()
+        result['available_time_range'] = (
+            dict(start=available_start, end=available_end)
+            if available_start is not None and available_end is not None
+            else None
+        )
         result['notice'] = (
             '請選擇綁定車輛與時間區間，查詢歷史軌跡。'
             if vehicles else '尚未綁定車輛，目前不提供個別軌跡。'
@@ -109,56 +123,73 @@ def blurred_range(value, step):
     return f"{lower:f} 至 {lower + step:f}（不含上限）"
 
 
-def owner_trajectory_view(row, vehicle_id):
-    location = decrypt_location(row.location_enc)
-    return dict(
-        vehicle_id=vehicle_id,
-        timestamp=row.timestamp,
-        latitude_range=blurred_range(location['lat'], '0.01'),
-        longitude_range=blurred_range(location['lng'], '0.01'),
-        speed_range=blurred_range(decrypt_speed(row.speed_enc), '10'),
-    )
-
-
 @router.get('/trajectories')
 def owner_trajectories(
     db: DbSession,
     user: Annotated[User, Depends(require_roles(Role.OWNER))],
-    response: Response,
-    vehicle_id: Annotated[str, Query(min_length=1, max_length=32)],
-    start: datetime,
-    end: datetime,
-    offset: Annotated[int, Query(ge=0)] = 0,
-):
-    response.headers['Cache-Control'] = 'no-store'
-    if start.tzinfo is not None or end.tzinfo is not None:
+    plate: Annotated[str, Query(min_length=1, max_length=32)],
+    data_type: Literal['location', 'speed'],
+    start: datetime | None = None,
+    end: datetime | None = None,
+) -> Response:
+    if (
+        (start is not None and start.tzinfo is not None)
+        or (end is not None and end.tzinfo is not None)
+    ):
         raise HTTPException(422, 'Use local timestamps without a timezone offset')
-    if start > end:
+    if start is not None and end is not None and start > end:
         raise HTTPException(422, 'Start must not be later than end')
-    binding = db.execute(
-        select(VehicleOwnership.id, Vehicle.plate_lookup)
+
+    plate_lookup = make_plate_lookup(plate)
+    binding = db.scalar(
+        select(VehicleOwnership.id)
         .join(Vehicle, Vehicle.vehicle_id == VehicleOwnership.vehicle_id)
         .where(
             VehicleOwnership.owner_id == user.id,
-            VehicleOwnership.vehicle_id == vehicle_id,
+            Vehicle.plate_lookup == plate_lookup,
         )
-    ).one_or_none()
+    )
     if binding is None:
         raise HTTPException(403, 'Vehicle is not bound to this account')
-    _, plate_lookup = binding
-    if plate_lookup is None:
-        raise HTTPException(409, 'Vehicle has no encrypted trajectory lookup value')
-    rows = db.scalars(select(EncryptedTrajectory).where(
-        EncryptedTrajectory.plate_lookup == plate_lookup,
-        EncryptedTrajectory.timestamp >= start,
-        EncryptedTrajectory.timestamp <= end,
-    ).order_by(
+
+    conditions = [EncryptedTrajectory.plate_lookup == plate_lookup]
+    if start is not None:
+        conditions.append(EncryptedTrajectory.timestamp >= start)
+    if end is not None:
+        conditions.append(EncryptedTrajectory.timestamp <= end)
+
+    rows = db.scalars(select(EncryptedTrajectory).where(*conditions).order_by(
         EncryptedTrajectory.timestamp,
         EncryptedTrajectory.id,
-    ).offset(offset).limit(101)).all()
-    return dict(
-        offset=offset, page_size=100, has_more=len(rows) > 100,
-        records=[owner_trajectory_view(row, vehicle_id) for row in rows[:100]],
+    ))
+
+    output = StringIO()
+    writer = csv.writer(output)
+    if data_type == 'location':
+        writer.writerow(['timestamp', 'latitude_range', 'longitude_range'])
+        for row in rows:
+            location = decrypt_location(row.location_enc)
+            writer.writerow([
+                row.timestamp.isoformat(sep=' '),
+                blurred_range(location['lat'], '0.01'),
+                blurred_range(location['lng'], '0.01'),
+            ])
+    else:
+        writer.writerow(['timestamp', 'speed_range_kmh'])
+        for row in rows:
+            writer.writerow([
+                row.timestamp.isoformat(sep=' '),
+                blurred_range(decrypt_speed(row.speed_enc), '10'),
+            ])
+
+    filename = f"owner-{data_type}-trajectories.csv"
+    return Response(
+        content='\ufeff' + output.getvalue(),
+        media_type='text/csv; charset=utf-8',
+        headers={
+            'Cache-Control': 'no-store',
+            'Content-Disposition': f'attachment; filename="{filename}"',
+        },
     )
 
 class RequestInput(BaseModel):

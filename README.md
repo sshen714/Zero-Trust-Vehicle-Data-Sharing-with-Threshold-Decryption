@@ -226,7 +226,7 @@ vehicle_data_sharing.encrypted_trajectories
 
 | 身份 | 測試帳號 | 目前展示的畫面 |
 | --- | --- | --- |
-| 車主 | `demo_owner` | 本人車牌唯讀欄位、查詢按鈕及結果空位，尚未串接資料 |
+| 車主 | `demo_owner` | 輸入本人綁定車牌與選填時間，下載模糊位置或模糊速度 CSV |
 | 訪客 | `demo_visitor` | 時間區間查詢、車流量、平均速度、壅塞程度（統計值為空） |
 | 合作廠商 | `demo_vendor` | 資料使用申請、核准資料分析、主管 A OTP 申請與驗證入口（精準位置） |
 | 主管 A | `demo_supervisor_a` | 位置查詢、主管 B OTP 申請與驗證入口（精準速度） |
@@ -235,10 +235,10 @@ vehicle_data_sharing.encrypted_trajectories
 | 交通研究者 | `demo_researcher` | 依時間查詢研究資料，不顯示車牌查詢欄位 |
 | 警方 | `demo_police` | 依案件編號、車牌與時間查詢，以及案件 OTP 申請與驗證入口 |
 
-操作方式：開啟 `http://127.0.0.1:5500/login.html`，登入不同身份的測試帳號查看畫面；切換身份時先登出。所有工作區操作均為介面展示，未串接業務資料。已有的後端 API 保留，後續再逐步接上。
+操作方式：開啟 `http://127.0.0.1:5500/login.html`，登入不同身份的測試帳號查看畫面；切換身份時先登出。車主可下載本人綁定車輛的模糊位置或速度 CSV；其他角色的操作目前仍以介面展示為主。
 
 後端每次請求都重新查詢帳號角色及啟用狀態。公開註冊仍固定建立訪客，不能由前端指定主管或管理者角色。
 
 此版本為角色權限與雙人審核的第一階段：分析授權是帳號層級、無到期時間，只提供去除個別車輛識別的交通統計；研究者與警方查詢、其他身份的時間區間篩選與位置／速度模糊化、Email OTP、事故分析、正式的授權範圍／撤銷流程、門檻解密及網站維護操作尚未實作。資料筆數少時，彙總值仍不等同匿名化保證。
 
-交通統計及每日分析使用 `encrypted_trajectories`，後端只在記憶體中解密計算所需的速度。後端工作區 API 依登入帳號從 `vehicle_ownerships` 取得綁定車輛，再以 `vehicles.plate_lookup` 查詢加密軌跡；車主可使用 `GET /workspace/trajectories` 查詢自己的綁定車輛。起訖時間均包含端點，時間不帶時區且依資料庫記錄解讀，每頁 100 筆。位置與速度解密後，經緯度採 0.01° 區間、速度採 10 km/h 區間（皆不含上限），不回傳精準值。資料申請使用 `data_requests`。五張資料表統一定義於 `backend/models.py`，由 `scripts/create_table.py` 建立。
+交通統計及每日分析使用 `encrypted_trajectories`，後端只在記憶體中解密計算所需的速度。車主使用 `GET /workspace/trajectories` 輸入車牌；後端計算 `plate_lookup`、檢查 `vehicle_ownerships`，再查詢加密軌跡。時間條件可省略，若提供則包含起訖端點且不帶時區。位置 CSV 的經緯度採 0.01° 區間，速度 CSV 採 10 km/h 區間（皆不含上限），不回傳精準值。資料申請使用 `data_requests`。五張資料表統一定義於 `backend/models.py`，由 `scripts/create_table.py` 建立。

@@ -52,7 +52,7 @@ police
 | `GET` | `/auth/me` | 已登入 | 回傳資料庫中的目前帳號與角色 |
 | `GET` | `/users` | `admin` | 分頁列出帳號，單次最多 100 筆 |
 | `GET` | `/workspace` | 已登入 | 依角色回傳工作區標籤及目前可用資料 |
-| `GET` | `/workspace/trajectories` | `owner` | 查詢本人綁定車輛的指定時間軌跡 |
+| `GET` | `/workspace/trajectories` | `owner` | 依輸入車牌與選填時間下載模糊位置或速度 CSV |
 | `POST` | `/workspace/requests` | `vendor` | 提交資料使用目的 |
 | `POST` | `/workspace/requests/{request_id}/decision` | `supervisor_a`、`supervisor_b` | 記錄該主管的核准或拒絕決定 |
 
@@ -65,7 +65,7 @@ police
 - 管理者：帳號、軌跡與申請數量，以及最近 100 個帳號的基本狀態。
 - 交通研究者、警方：目前回傳角色標籤、主要任務與狀態說明。
 
-車主軌跡查詢會先確認 `vehicle_ownerships` 中的所有權，使用 `vehicles.plate_lookup` 篩選 `encrypted_trajectories`，再於後端記憶體解密位置與速度。時間保留資料庫原值；經緯度以 0.01 度區間回傳，速度以 10 km/h 區間回傳，每頁最多 100 筆。`start` 與 `end` 使用不帶時區的本地時間，且包含兩個端點。
+車主軌跡查詢接收 `plate`、`data_type`，以及選填的 `start`、`end`。後端由輸入車牌計算 `plate_lookup`，確認 `vehicle_ownerships` 中的所有權，再篩選 `encrypted_trajectories`。`data_type=location` 只解密位置並輸出 0.01 度區間；`data_type=speed` 只解密速度並輸出 10 km/h 區間。CSV 保留精確時間，但不包含精確位置、精確速度、車牌密文或其他密文欄位。
 
 資料申請分別保存主管 A 與主管 B 的決定。任一主管拒絕時狀態為 `rejected`；兩者都核准時為 `approved`；其他情況為 `pending`。同一主管不能重複修改已記錄的決定。
 

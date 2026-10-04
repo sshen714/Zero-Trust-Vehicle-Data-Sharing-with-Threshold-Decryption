@@ -50,6 +50,123 @@ function authenticatedRequest(path, token, options = {}) {
 }
 
 
+async function authenticatedDownload(path, token) {
+    let response;
+    try {
+        response = await fetch(`${API_BASE}${path}`, {
+            headers: {Authorization: `Bearer ${token}`},
+            cache: "no-store",
+            signal: AbortSignal.timeout(30000),
+        });
+    } catch {
+        throw new Error("無法連線至後端，或下載等待時間過長。");
+    }
+
+    if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        const error = new Error(
+            response.status === 401
+                ? "登入憑證無效或已過期，請重新登入。"
+                : response.status === 403
+                    ? "此車牌未綁定至目前帳號。"
+                    : (typeof data?.detail === "string"
+                        ? data.detail
+                        : "後端無法產生 CSV，請稍後再試。")
+        );
+        error.status = response.status;
+        throw error;
+    }
+    return response.blob();
+}
+
+
+function displayDateTime(value) {
+    const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/.exec(value);
+    if (!match) return value;
+    return `${match[1]}/${match[2]}/${match[3]} ${match[4]}:${match[5]}:${match[6]}`;
+}
+
+
+function initializeOwnerWorkspace(token, workspaceData) {
+    const plateInput = document.getElementById("owner-plate");
+    const startInput = document.getElementById("owner-start");
+    const endInput = document.getElementById("owner-end");
+    const rangeText = document.getElementById("owner-available-range");
+    const buttons = [...document.querySelectorAll("[data-owner-export]")];
+    if (!plateInput || !startInput || !endInput || !rangeText || !buttons.length) return;
+
+    const availableRange = workspaceData.available_time_range;
+    if (
+        availableRange
+        && typeof availableRange.start === "string"
+        && typeof availableRange.end === "string"
+    ) {
+        const rangeStart = availableRange.start.slice(0, 19);
+        const rangeEnd = availableRange.end.slice(0, 19);
+        startInput.min = rangeStart;
+        startInput.max = rangeEnd;
+        startInput.value = rangeStart;
+        endInput.min = rangeStart;
+        endInput.max = rangeEnd;
+        endInput.value = rangeEnd;
+        rangeText.textContent = `可查詢時間：${displayDateTime(rangeStart)} ～ ${displayDateTime(rangeEnd)}`;
+    } else {
+        rangeText.textContent = "目前沒有可查詢的模擬資料。";
+        buttons.forEach((item) => { item.disabled = true; });
+    }
+
+    buttons.forEach((button) => {
+        button.addEventListener("click", async () => {
+            const plate = plateInput.value.trim();
+            if (!plate) {
+                message.textContent = "請先輸入車牌。";
+                plateInput.focus();
+                return;
+            }
+            if (startInput.value && endInput.value && startInput.value > endInput.value) {
+                message.textContent = "開始時間不能晚於結束時間。";
+                startInput.focus();
+                return;
+            }
+
+            const dataType = button.dataset.ownerExport;
+            const params = new URLSearchParams({plate, data_type: dataType});
+            if (startInput.value) params.set("start", startInput.value);
+            if (endInput.value) params.set("end", endInput.value);
+
+            buttons.forEach((item) => { item.disabled = true; });
+            message.textContent = "正在驗證車輛、解密並產生 CSV…";
+            try {
+                const blob = await authenticatedDownload(
+                    `/workspace/trajectories?${params.toString()}`,
+                    token,
+                );
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `owner-${dataType}-trajectories.csv`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(url);
+                message.textContent = dataType === "location"
+                    ? "模糊位置 CSV 已下載。"
+                    : "模糊速度 CSV 已下載。";
+            } catch (error) {
+                if (error.status === 401) {
+                    clearSession();
+                    location.replace("login.html?reason=session");
+                    return;
+                }
+                message.textContent = error.message;
+            } finally {
+                buttons.forEach((item) => { item.disabled = false; });
+            }
+        });
+    });
+}
+
+
 async function loadWorkspace(workspace, token, expectedRole) {
     workspace.setAttribute("aria-busy", "true");
     message.textContent = "身分驗證成功，正在載入工作區資料…";
@@ -160,7 +277,8 @@ async function initializeProfilePage(profile) {
                 message.textContent = `「${button.textContent}」目前僅展示操作介面，未查詢或送出資料。`;
             });
         });
-        await loadWorkspace(workspace, token, user.role);
+        const workspaceData = await loadWorkspace(workspace, token, user.role);
+        if (user.role === "owner") initializeOwnerWorkspace(token, workspaceData);
     } catch (error) {
         if (error.status === 401 || error.status === 403) {
             clearSession();
