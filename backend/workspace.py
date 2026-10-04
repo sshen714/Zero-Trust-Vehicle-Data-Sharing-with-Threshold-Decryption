@@ -177,6 +177,7 @@ def owner_trajectories(
         EncryptedTrajectory.timestamp,
         EncryptedTrajectory.id,
     )))
+    rows = list({row.timestamp: row for row in rows}.values())
 
     output = StringIO()
     writer = csv.writer(output)

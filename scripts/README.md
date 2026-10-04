@@ -44,7 +44,7 @@ pets.py
 - `lng`
 - `speed_kmh`
 
-模擬產生的 raw data 只存在程式記憶體中，接著交由 `encryption.py` 處理；MySQL 只保存加密後的結果。每次可查詢的資料都來自 `simulation_data.py` 產生的模擬資料。
+模擬產生的 raw data 只存在程式記憶體中，接著交由 `encryption.py` 處理；MySQL 只保存加密後的結果。每次可查詢的資料都來自 `simulation_data.py` 產生的模擬資料。模擬器每次寫入完整資料集時，會在同一個交易內取代這批車輛先前的加密軌跡，避免固定 timestamp 因重複執行而累積。
 
 資料庫目前主要儲存：
 

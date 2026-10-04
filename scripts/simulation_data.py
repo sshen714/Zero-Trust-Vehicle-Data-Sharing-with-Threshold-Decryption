@@ -121,7 +121,7 @@ def save_encrypted_database(df):
         make_internal_vehicle_id,
         make_plate_lookup,
     )
-    from sqlalchemy import insert, select
+    from sqlalchemy import delete, insert, select
 
     plain = prepare_trajectory_dataframe(df)
     encrypted = encrypt_dataframe(plain)
@@ -150,6 +150,15 @@ def save_encrypted_database(df):
         ]
         if new_vehicles:
             conn.execute(insert(Vehicle), new_vehicles)
+
+        # The simulator produces a complete fixed demo data set. Replace older
+        # runs for these vehicles so rerunning the script cannot duplicate every
+        # timestamp in encrypted_trajectories.
+        conn.execute(
+            delete(EncryptedTrajectory).where(
+                EncryptedTrajectory.plate_lookup.in_(lookup_values)
+            )
+        )
 
         encrypted.to_sql(
             name=EncryptedTrajectory.__tablename__,
