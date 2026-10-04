@@ -31,6 +31,8 @@ async function apiRequest(path, options = {}) {
                     : "登入憑證無效或已過期，請重新登入。")
                 : response.status === 403
                     ? "帳號已停權，或沒有存取權限。"
+                    : response.status === 404 && data?.detail === "Vehicle is not available"
+                        ? "找不到此車輛，請確認車輛代碼是否完整且正確。"
                     : response.status === 422
                         ? (path === "/auth/login"
                             ? "輸入格式不正確，請檢查帳號與密碼。"
