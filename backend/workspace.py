@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field, ConfigDict
-from sqlalchemy import select, func
+from sqlalchemy import delete, select, func
 from scripts.decryption import decrypt_location, decrypt_speed
 from scripts.encryption import make_plate_lookup
 from scripts.pets import apply_owner_pets, apply_researcher_pets
@@ -770,6 +770,12 @@ def utc_now_naive() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+def delete_expired_otp_challenges(db, now: datetime) -> None:
+    db.execute(
+        delete(OtpChallenge).where(OtpChallenge.expires_at <= now)
+    )
+
+
 def otp_digest(
     otp_kind: str,
     request_id: int,
@@ -834,7 +840,9 @@ def submit_vendor_location_request(
     db.flush()
 
     otp = f'{secrets.randbelow(1_000_000):06d}'
-    expires_at = utc_now_naive() + timedelta(minutes=5)
+    now = utc_now_naive()
+    delete_expired_otp_challenges(db, now)
+    expires_at = now + timedelta(minutes=5)
     db.add(OtpChallenge(
         request_id=request_row.id,
         otp_hash=otp_digest(
@@ -890,11 +898,17 @@ def verify_vendor_location_otp(
     if challenge is None:
         raise HTTPException(404, 'OTP challenge not found')
     if challenge.consumed_at is not None:
+        db.delete(challenge)
+        db.commit()
         raise HTTPException(409, 'OTP has already been used')
     now = utc_now_naive()
     if now >= challenge.expires_at:
+        db.delete(challenge)
+        db.commit()
         raise HTTPException(410, 'OTP has expired')
     if challenge.attempt_count >= challenge.max_attempts:
+        db.delete(challenge)
+        db.commit()
         raise HTTPException(429, 'OTP attempt limit reached')
 
     plate_lookup = make_plate_lookup(data.plate)
@@ -908,7 +922,12 @@ def verify_vendor_location_otp(
     )
     if not hmac.compare_digest(challenge.otp_hash, expected_hash):
         challenge.attempt_count += 1
+        attempts_exhausted = challenge.attempt_count >= challenge.max_attempts
+        if attempts_exhausted:
+            db.delete(challenge)
         db.commit()
+        if attempts_exhausted:
+            raise HTTPException(429, 'OTP attempt limit reached')
         raise HTTPException(422, 'OTP is incorrect')
 
     rows = list(db.scalars(
@@ -933,8 +952,8 @@ def verify_vendor_location_otp(
             f"{location['lng']:.6f}",
         ])
 
-    challenge.consumed_at = now
     request_row.decision_a = 'approved'
+    db.delete(challenge)
     db.commit()
     return Response(
         content='\ufeff' + output.getvalue(),
@@ -990,7 +1009,9 @@ def submit_supervisor_a_speed_request(
     db.flush()
 
     otp = f'{secrets.randbelow(1_000_000):06d}'
-    expires_at = utc_now_naive() + timedelta(minutes=5)
+    now = utc_now_naive()
+    delete_expired_otp_challenges(db, now)
+    expires_at = now + timedelta(minutes=5)
     db.add(OtpChallenge(
         request_id=request_row.id,
         otp_hash=otp_digest(
@@ -1046,11 +1067,17 @@ def verify_supervisor_a_speed_otp(
     if challenge is None:
         raise HTTPException(404, 'OTP challenge not found')
     if challenge.consumed_at is not None:
+        db.delete(challenge)
+        db.commit()
         raise HTTPException(409, 'OTP has already been used')
     now = utc_now_naive()
     if now >= challenge.expires_at:
+        db.delete(challenge)
+        db.commit()
         raise HTTPException(410, 'OTP has expired')
     if challenge.attempt_count >= challenge.max_attempts:
+        db.delete(challenge)
+        db.commit()
         raise HTTPException(429, 'OTP attempt limit reached')
 
     plate_lookup = make_plate_lookup(data.plate)
@@ -1064,7 +1091,12 @@ def verify_supervisor_a_speed_otp(
     )
     if not hmac.compare_digest(challenge.otp_hash, expected_hash):
         challenge.attempt_count += 1
+        attempts_exhausted = challenge.attempt_count >= challenge.max_attempts
+        if attempts_exhausted:
+            db.delete(challenge)
         db.commit()
+        if attempts_exhausted:
+            raise HTTPException(429, 'OTP attempt limit reached')
         raise HTTPException(422, 'OTP is incorrect')
 
     rows = list(db.scalars(
@@ -1087,8 +1119,8 @@ def verify_supervisor_a_speed_otp(
             f'{decrypt_speed(row.speed_enc):.1f}',
         ])
 
-    challenge.consumed_at = now
     request_row.decision_b = 'approved'
+    db.delete(challenge)
     db.commit()
     return Response(
         content='\ufeff' + output.getvalue(),
