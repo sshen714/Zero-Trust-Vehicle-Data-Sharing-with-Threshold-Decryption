@@ -268,6 +268,13 @@ def make_plate_lookup(plate):
     ).hexdigest()
 
 
+def make_internal_vehicle_id(plate_lookup):
+    """Create an opaque 128-bit vehicle reference from a plate lookup value."""
+    if not re.fullmatch(r"[0-9a-f]{64}", str(plate_lookup)):
+        raise ValueError("plate_lookup must be a lowercase SHA-256 hex digest")
+    return str(plate_lookup)[:32]
+
+
 # ==================================================
 # 8. 車牌加密
 # ==================================================

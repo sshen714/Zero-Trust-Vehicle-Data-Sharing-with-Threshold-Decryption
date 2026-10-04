@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
 from enum import StrEnum
 
 from sqlalchemy import (
@@ -13,7 +12,6 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Integer,
-    Numeric,
     String,
     Text,
     func,
@@ -63,33 +61,17 @@ class User(Base):
 
 
 class Vehicle(Base):
-    """A vehicle known to the system, independent of its current owner."""
+    """A vehicle referenced by an opaque ID and a non-reversible plate lookup."""
 
     __tablename__ = "vehicles"
 
     vehicle_id: Mapped[str] = mapped_column(String(32), primary_key=True)
-    plate_lookup: Mapped[str | None] = mapped_column(
-        String(64), unique=True, index=True, nullable=True
+    plate_lookup: Mapped[str] = mapped_column(
+        String(64), unique=True, index=True, nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), nullable=False
     )
-
-
-class RawTrajectory(Base):
-    """Plain simulated input retained only for development and demonstrations."""
-
-    __tablename__ = "raw_trajectories"
-    __table_args__ = {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"}
-
-    id: Mapped[int] = mapped_column(
-        BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True
-    )
-    vehicle_id: Mapped[str] = mapped_column(String(32), nullable=False)
-    timestamp: Mapped[datetime] = mapped_column(DateTime, nullable=False)
-    lat: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
-    lng: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
-    speed_kmh: Mapped[Decimal | None] = mapped_column(Numeric(8, 1), nullable=True)
 
 
 class EncryptedTrajectory(Base):

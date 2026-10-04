@@ -14,7 +14,7 @@ encryption.py
 MySQL
 ```
 
-`simulation_data.py` 先產生車輛模擬資料，再呼叫 `encryption.py` 將敏感欄位加密後寫入資料庫。
+`simulation_data.py` 先產生車輛模擬資料，再呼叫 `encryption.py` 將敏感欄位加密後寫入 `encrypted_trajectories`，不建立或寫入明文軌跡表。`vehicles` 只登記由 HMAC 查詢碼衍生的不透明內部 ID 與 `plate_lookup`，不保存解密後的車牌。
 
 ### 使用者查詢流程
 
@@ -44,7 +44,7 @@ pets.py
 - `lng`
 - `speed_kmh`
 
-模擬資料產生後，會先交由 `encryption.py` 處理，再寫入 MySQL。
+模擬產生的 raw data 只存在程式記憶體中，接著交由 `encryption.py` 處理；MySQL 只保存加密後的結果。每次可查詢的資料都來自 `simulation_data.py` 產生的模擬資料。
 
 資料庫目前主要儲存：
 
