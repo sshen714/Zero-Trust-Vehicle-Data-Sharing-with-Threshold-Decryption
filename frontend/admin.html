@@ -63,9 +63,21 @@
 </section>
 <section class="feature-card">
 <h3>OTP 申請</h3>
-<p>申請解鎖精準資料所需的 OTP。</p>
-<div class="preview-actions"><button type="button" data-preview>申請 OTP</button></div>
-
+<p>精準位置由主管 A OTP 解鎖，精準速度由主管 B OTP 解鎖。</p>
+<p>時間範圍與車牌至少填寫一項；選擇時間時，開始與結束時間必須一起填寫。</p>
+<form id="admin-otp-form">
+<label for="admin-otp-plate">車牌</label>
+<input id="admin-otp-plate" name="plate" type="text" maxlength="32" autocomplete="off" placeholder="例如 V00000">
+<label for="admin-otp-start">開始時間</label>
+<input id="admin-otp-start" name="start" type="datetime-local" step="1">
+<label for="admin-otp-end">結束時間</label>
+<input id="admin-otp-end" name="end" type="datetime-local" step="1">
+<div class="preview-actions">
+<button id="admin-otp-location-submit" type="submit" name="data_type" value="location">送出申請精準位置</button>
+<button id="admin-otp-speed-submit" type="submit" name="data_type" value="speed">送出申請精準速度</button>
+</div>
+</form>
+<p id="admin-otp-message" role="status" aria-live="polite"></p>
 </section>
             </div>
         </section>

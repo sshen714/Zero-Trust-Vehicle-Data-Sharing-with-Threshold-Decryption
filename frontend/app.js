@@ -828,8 +828,43 @@ function initializeAdminAccountLookup(token) {
 }
 
 
+function initializeAdminOtpPreview() {
+    const form = document.getElementById("admin-otp-form");
+    const plateInput = document.getElementById("admin-otp-plate");
+    const startInput = document.getElementById("admin-otp-start");
+    const endInput = document.getElementById("admin-otp-end");
+    const statusText = document.getElementById("admin-otp-message");
+    if (!form || !plateInput || !startInput || !endInput || !statusText) return;
+
+    form.addEventListener("input", () => {
+        statusText.textContent = "";
+    });
+    form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const plate = plateInput.value.trim();
+        const start = startInput.value;
+        const end = endInput.value;
+        if (!plate && !start && !end) {
+            statusText.textContent = "請至少填寫時間範圍或車牌其中一項。";
+            return;
+        }
+        if ((start && !end) || (!start && end)) {
+            statusText.textContent = "請同時填寫開始時間與結束時間。";
+            return;
+        }
+        if (start && end && new Date(start) > new Date(end)) {
+            statusText.textContent = "開始時間不能晚於結束時間。";
+            return;
+        }
+        const dataLabel = event.submitter?.value === "speed" ? "精準速度" : "精準位置";
+        statusText.textContent = `${dataLabel}申請條件已確認。目前僅提供前端預覽，尚未送出 OTP 申請。`;
+    });
+}
+
+
 function initializeAdminWorkspace(token, workspaceData) {
     initializeAdminAccountLookup(token);
+    initializeAdminOtpPreview();
     const memberCount = document.getElementById("admin-member-count");
     const vehicleCount = document.getElementById("admin-vehicle-count");
     const roleCount = document.getElementById("admin-role-count");
