@@ -138,7 +138,7 @@ python scripts/create_table.py
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-若要讓 VirtualBox 外的主機透過連接埠轉送存取，可將啟動參數改為 `--host 0.0.0.0`。
+若瀏覽器在 Windows 主機、服務在 VirtualBox Linux 虛擬機，後端使用 `--host 0.0.0.0`，前端使用 `--bind 0.0.0.0`。VirtualBox NAT 必須分別轉送主機的 `5500` 與 `8000` 到客體的同名連接埠；Windows 瀏覽器開啟 `http://127.0.0.1:5500/login.html`。完整指令、轉送規則及排查方式請見[主 README 的虛擬機說明](../README.md#windows-瀏覽器存取-virtualbox-中的服務)。
 
 API 文件位於：
 
