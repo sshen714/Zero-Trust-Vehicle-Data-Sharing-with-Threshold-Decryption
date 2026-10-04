@@ -589,25 +589,138 @@ function initializeSupervisorAWorkspace(token, workspaceData) {
 
 
 function initializeSupervisorBWorkspace(token, workspaceData) {
+    const purposeInput = document.getElementById("supervisor_b-0-0");
+    const requestVehicleInput = document.getElementById("supervisor_b-0-1");
+    const requestStartInput = document.getElementById("supervisor_b-0-2");
+    const requestEndInput = document.getElementById("supervisor_b-0-3");
+    const requestRangeText = document.getElementById("supervisor-b-request-available-range");
+    const requestButton = document.getElementById("supervisor-b-request-submit");
+    const otpEntry = document.getElementById("supervisor-b-otp-entry");
+    const otpInput = document.getElementById("supervisor-b-otp-code");
+    const otpButton = document.getElementById("supervisor-b-otp-submit");
     const plateInput = document.getElementById("supervisor-b-plate");
     const startInput = document.getElementById("supervisor-b-start");
     const endInput = document.getElementById("supervisor-b-end");
     const rangeText = document.getElementById("supervisor-b-available-range");
     const downloadButton = document.getElementById("supervisor-b-download");
-    if (!plateInput || !startInput || !endInput || !rangeText || !downloadButton) return;
+    if (
+        !purposeInput || !requestVehicleInput || !requestStartInput || !requestEndInput
+        || !requestRangeText || !requestButton || !otpEntry || !otpInput || !otpButton
+        || !plateInput || !startInput || !endInput || !rangeText || !downloadButton
+    ) return;
+
+    let requestId = null;
+    otpInput.addEventListener("input", () => {
+        otpInput.value = otpInput.value.replace(/\D/g, "").slice(0, 6);
+    });
+    requestButton.addEventListener("click", async () => {
+        if (!purposeInput.value.trim() || !requestVehicleInput.value.trim()) {
+            message.textContent = "請填寫使用目的與車輛。";
+            return;
+        }
+        if (!requestStartInput.value || !requestEndInput.value) {
+            message.textContent = "請選擇申請的開始時間與結束時間。";
+            return;
+        }
+        if (requestStartInput.value > requestEndInput.value) {
+            message.textContent = "申請的開始時間不能晚於結束時間。";
+            return;
+        }
+        requestButton.disabled = true;
+        message.textContent = "正在建立精準位置申請與 Demo OTP…";
+        try {
+            const result = await authenticatedRequest(
+                "/workspace/supervisor-b/location-requests",
+                token,
+                {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        purpose: purposeInput.value.trim(),
+                        plate: requestVehicleInput.value.trim(),
+                        start: requestStartInput.value,
+                        end: requestEndInput.value,
+                    }),
+                },
+            );
+            requestId = result.request_id;
+            requestButton.hidden = true;
+            otpEntry.hidden = false;
+            otpInput.focus();
+            message.textContent = `Demo OTP：${result.demo_otp}（5 分鐘內有效）`;
+        } catch (error) {
+            if (error.status === 401) {
+                clearSession();
+                location.replace("login.html?reason=session");
+                return;
+            }
+            message.textContent = error.message;
+        } finally {
+            requestButton.disabled = false;
+        }
+    });
+    otpButton.addEventListener("click", async () => {
+        if (!Number.isInteger(requestId)) {
+            message.textContent = "請先送出申請。";
+            return;
+        }
+        if (!/^\d{6}$/.test(otpInput.value)) {
+            message.textContent = "請輸入完整的 6 位數 OTP。";
+            return;
+        }
+        otpButton.disabled = true;
+        message.textContent = "正在驗證 OTP…";
+        try {
+            const blob = await authenticatedPostDownload(
+                `/workspace/supervisor-b/location-requests/${requestId}/verify-otp`,
+                token,
+                {
+                    otp: otpInput.value,
+                    plate: requestVehicleInput.value.trim(),
+                    start: requestStartInput.value,
+                    end: requestEndInput.value,
+                },
+            );
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "supervisor-b-authorized-locations.csv";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+            otpInput.disabled = true;
+            otpButton.hidden = true;
+            message.textContent = "OTP 驗證成功，精準位置 CSV 已下載。";
+        } catch (error) {
+            if (error.status === 401) {
+                clearSession();
+                location.replace("login.html?reason=session");
+                return;
+            }
+            message.textContent = error.message;
+        } finally {
+            otpButton.disabled = false;
+        }
+    });
 
     const availableRange = workspaceData.available_time_range;
     if (availableRange?.start && availableRange?.end) {
         const rangeStart = availableRange.start.slice(0, 19);
         const rangeEnd = availableRange.end.slice(0, 19);
-        for (const input of [startInput, endInput]) {
+        for (const input of [requestStartInput, requestEndInput, startInput, endInput]) {
             input.min = rangeStart;
             input.max = rangeEnd;
         }
+        requestStartInput.value = rangeStart;
+        requestEndInput.value = rangeEnd;
         startInput.value = rangeStart;
         endInput.value = rangeEnd;
+        requestRangeText.textContent = `可申請時間：${displayDateTime(rangeStart)} ～ ${displayDateTime(rangeEnd)}`;
         rangeText.textContent = `可查詢時間：${displayDateTime(rangeStart)} ～ ${displayDateTime(rangeEnd)}`;
     } else {
+        requestRangeText.textContent = "目前沒有可申請的模擬資料。";
+        requestButton.disabled = true;
         rangeText.textContent = "目前沒有可查詢的模擬資料。";
         downloadButton.disabled = true;
     }

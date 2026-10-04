@@ -251,7 +251,9 @@ vehicle_data_sharing.encrypted_trajectories
 
 主管 A 左側已提供精準速度 OTP 模擬。OTP 雜湊綁定車牌與時間範圍，五分鐘內最多嘗試五次；驗證成功後立即下載精準速度 CSV 並刪除 OTP 紀錄，過期或達到錯誤上限時也會在存取時清除。Demo 期間 API 會回傳原始 OTP 供本機測試，目前尚未寄送 Email。
 
-主管 B 使用 `GET /workspace/supervisor-b/speeds` 依車牌與必填時間範圍下載精準速度 CSV。端點只允許 `supervisor_b`，並且只解密速度；CSV 不包含車牌、`plate_lookup`、位置或密文。左側精準位置申請保留給後續 OTP 流程，目前尚未串接。
+主管 B 使用 `GET /workspace/supervisor-b/speeds` 依車牌與必填時間範圍下載精準速度 CSV。端點只允許 `supervisor_b`，並且只解密速度；CSV 不包含車牌、`plate_lookup`、位置或密文。
+
+主管 B 左側已提供精準位置 OTP 模擬。OTP 雜湊綁定車牌與時間範圍，五分鐘內最多嘗試五次；驗證成功後立即下載精準位置 CSV 並刪除 OTP 紀錄，過期或達到錯誤上限時也會在存取時清除。Demo 期間 API 會回傳原始 OTP 供本機測試，目前尚未寄送 Email。
 
 系統管理者使用 `GET /workspace/admin/trajectories` 依必填時間及車牌或完整速度範圍篩選資料。後端解密後套用速度條件，再輸出已去除行程首尾的模糊位置與 10 km/h 速度區間 CSV；CSV 不包含車牌、`plate_lookup`、精準位置、精準速度或密文。
 

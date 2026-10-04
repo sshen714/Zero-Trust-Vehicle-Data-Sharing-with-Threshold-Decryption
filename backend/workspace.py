@@ -1133,6 +1133,175 @@ def verify_supervisor_a_speed_otp(
         },
     )
 
+
+@router.post('/supervisor-b/location-requests', status_code=201)
+def submit_supervisor_b_location_request(
+    data: VendorLocationRequestInput,
+    db: DbSession,
+    user: Annotated[User, Depends(require_roles(Role.SUPERVISOR_B))],
+    response: Response,
+):
+    if data.start.tzinfo is not None or data.end.tzinfo is not None:
+        raise HTTPException(422, 'Use local timestamps without a timezone offset')
+    if data.start > data.end:
+        raise HTTPException(422, 'Start must not be later than end')
+
+    plate_lookup = make_plate_lookup(data.plate)
+    vehicle_exists = db.scalar(
+        select(Vehicle.vehicle_id).where(Vehicle.plate_lookup == plate_lookup)
+    )
+    if vehicle_exists is None:
+        raise HTTPException(404, 'Vehicle is not available')
+    available_start, available_end = db.execute(
+        select(
+            func.min(EncryptedTrajectory.timestamp),
+            func.max(EncryptedTrajectory.timestamp),
+        )
+    ).one()
+    if (
+        available_start is None
+        or available_end is None
+        or data.start < available_start
+        or data.end > available_end
+    ):
+        raise HTTPException(422, 'Requested time is outside the available range')
+
+    request_row = DataRequest(
+        vendor_id=user.id,
+        purpose=data.purpose,
+        decision_a='pending',
+        decision_b='not_required',
+    )
+    db.add(request_row)
+    db.flush()
+
+    otp = f'{secrets.randbelow(1_000_000):06d}'
+    now = utc_now_naive()
+    delete_expired_otp_challenges(db, now)
+    expires_at = now + timedelta(minutes=5)
+    db.add(OtpChallenge(
+        request_id=request_row.id,
+        otp_hash=otp_digest(
+            'supervisor-b-location-otp',
+            request_row.id,
+            otp,
+            plate_lookup,
+            data.start,
+            data.end,
+        ),
+        expires_at=expires_at,
+    ))
+    db.commit()
+
+    response.headers['Cache-Control'] = 'no-store'
+    response.headers['Pragma'] = 'no-cache'
+    return {
+        'request_id': request_row.id,
+        'expires_at': expires_at,
+        'demo_otp': otp,
+    }
+
+
+@router.post('/supervisor-b/location-requests/{request_id}/verify-otp')
+def verify_supervisor_b_location_otp(
+    request_id: int,
+    data: OtpVerificationInput,
+    db: DbSession,
+    user: Annotated[User, Depends(require_roles(Role.SUPERVISOR_B))],
+):
+    if data.start.tzinfo is not None or data.end.tzinfo is not None:
+        raise HTTPException(422, 'Use local timestamps without a timezone offset')
+    if data.start > data.end:
+        raise HTTPException(422, 'Start must not be later than end')
+
+    request_row = db.scalar(
+        select(DataRequest).where(
+            DataRequest.id == request_id,
+            DataRequest.vendor_id == user.id,
+            DataRequest.decision_b == 'not_required',
+        )
+    )
+    if request_row is None:
+        raise HTTPException(404, 'Request not found')
+
+    challenge = db.scalar(
+        select(OtpChallenge)
+        .where(OtpChallenge.request_id == request_id)
+        .order_by(OtpChallenge.id.desc())
+        .limit(1)
+        .with_for_update()
+    )
+    if challenge is None:
+        raise HTTPException(404, 'OTP challenge not found')
+    if challenge.consumed_at is not None:
+        db.delete(challenge)
+        db.commit()
+        raise HTTPException(409, 'OTP has already been used')
+    now = utc_now_naive()
+    if now >= challenge.expires_at:
+        db.delete(challenge)
+        db.commit()
+        raise HTTPException(410, 'OTP has expired')
+    if challenge.attempt_count >= challenge.max_attempts:
+        db.delete(challenge)
+        db.commit()
+        raise HTTPException(429, 'OTP attempt limit reached')
+
+    plate_lookup = make_plate_lookup(data.plate)
+    expected_hash = otp_digest(
+        'supervisor-b-location-otp',
+        request_id,
+        data.otp,
+        plate_lookup,
+        data.start,
+        data.end,
+    )
+    if not hmac.compare_digest(challenge.otp_hash, expected_hash):
+        challenge.attempt_count += 1
+        attempts_exhausted = challenge.attempt_count >= challenge.max_attempts
+        if attempts_exhausted:
+            db.delete(challenge)
+        db.commit()
+        if attempts_exhausted:
+            raise HTTPException(429, 'OTP attempt limit reached')
+        raise HTTPException(422, 'OTP is incorrect')
+
+    rows = list(db.scalars(
+        select(EncryptedTrajectory)
+        .where(
+            EncryptedTrajectory.plate_lookup == plate_lookup,
+            EncryptedTrajectory.timestamp >= data.start,
+            EncryptedTrajectory.timestamp <= data.end,
+        )
+        .order_by(EncryptedTrajectory.timestamp, EncryptedTrajectory.id)
+    ))
+    rows = list({row.timestamp: row for row in rows}.values())
+
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['timestamp', 'latitude', 'longitude'])
+    for row in rows:
+        location = decrypt_location(row.location_enc)
+        writer.writerow([
+            row.timestamp.isoformat(sep=' '),
+            f"{location['lat']:.6f}",
+            f"{location['lng']:.6f}",
+        ])
+
+    request_row.decision_a = 'approved'
+    db.delete(challenge)
+    db.commit()
+    return Response(
+        content='\ufeff' + output.getvalue(),
+        media_type='text/csv; charset=utf-8',
+        headers={
+            'Cache-Control': 'no-store',
+            'Content-Disposition': (
+                'attachment; filename="supervisor-b-authorized-locations.csv"'
+            ),
+        },
+    )
+
 class DecisionInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
     decision: Literal['approved', 'rejected']
