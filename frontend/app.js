@@ -209,7 +209,9 @@ async function requestPersonalDownloadOtp(token, payload, filename, buttons) {
             }
         });
         input.focus();
-        message.textContent = `Demo OTP：${request.demo_otp}（寄送對象：${request.recipient_email}，5 分鐘內有效）`;
+        message.textContent = request.delivery === "email"
+            ? `驗證碼已寄至 ${request.recipient_email}，請於 5 分鐘內輸入。`
+            : `Demo OTP：${request.demo_otp}（寄送對象：${request.recipient_email}，5 分鐘內有效）`;
     } catch (error) {
         if (error.status === 401) {
             clearSession();

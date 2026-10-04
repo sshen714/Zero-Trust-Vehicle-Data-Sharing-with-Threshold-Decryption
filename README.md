@@ -394,3 +394,16 @@ PYCODE
 | OTP 驗證失敗 | 使用本次申請的六位數碼及原車牌、時間與資料類型；五分鐘有效，最多錯誤五次 |
 
 公開平均速度先依車輛計算平均，再計算各車平均的平均值；範圍內不足三輛車時回傳 `null`。這個門檻不代表已實作差分隱私。現有角色 HTML 的部分提示仍保留「介面展示」或「尚未串接」文字，實際串接狀態以本 README 功能表與 `app.js` 的事件處理為準。
+
+
+## 10. Email OTP 實作進度：車主
+
+車主的本人下載申請已改為 SMTP 寄送 OTP 到 `users.email`，API 不再回傳車主的原始驗證碼。其他角色目前維持 Demo OTP。驗證碼仍為六位數、五分鐘有效，驗證成功才下載 CSV；寄信失敗回傳 503，並回滾本次申請與 OTP 紀錄。
+
+在本機 `backend/.env` 設定 `SMTP_HOST`、`SMTP_PORT`、`SMTP_SECURITY`、`SMTP_USERNAME`、`SMTP_PASSWORD` 與 `SMTP_FROM`。設定範例見 `backend/.env.example`；使用 `starttls` 或 `ssl` 加密連線。設定完成後重啟後端，確認車主帳號的 email 是可收信的真實地址，再申請下載並輸入信中的驗證碼。SMTP 服務接受郵件不代表已送達收件匣，必要時檢查垃圾郵件與寄信服務紀錄。
+
+此步驟尚未加入主管核准、寄信頻率限制或其他角色的 Email OTP。測試使用模擬 SMTP，不會寄出真實郵件：
+
+```bash
+python -m unittest discover -s tests -v
+```
