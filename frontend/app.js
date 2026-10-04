@@ -170,25 +170,70 @@ function initializeOwnerWorkspace(token, workspaceData) {
 
 
 function initializeVendorWorkspace(token, workspaceData) {
+    const purposeInput = document.getElementById("vendor-0-0");
+    const requestVehicleInput = document.getElementById("vendor-0-1");
+    const requestStartInput = document.getElementById("vendor-0-2");
+    const requestEndInput = document.getElementById("vendor-0-3");
+    const requestRangeText = document.getElementById("vendor-request-available-range");
+    const requestButton = document.getElementById("vendor-request-submit");
+    const otpEntry = document.getElementById("vendor-otp-entry");
+    const otpInput = document.getElementById("vendor-otp-code");
     const plateInput = document.getElementById("vendor-plate");
     const startInput = document.getElementById("vendor-start");
     const endInput = document.getElementById("vendor-end");
     const rangeText = document.getElementById("vendor-available-range");
     const buttons = [...document.querySelectorAll("[data-vendor-export]")];
-    if (!plateInput || !startInput || !endInput || !rangeText || !buttons.length) return;
+    if (
+        !purposeInput || !requestVehicleInput || !requestStartInput || !requestEndInput
+        || !requestRangeText || !requestButton || !otpEntry || !otpInput
+        || !plateInput || !startInput || !endInput || !rangeText || !buttons.length
+    ) return;
+
+    if (
+        purposeInput && requestVehicleInput && requestStartInput && requestEndInput
+        && requestRangeText
+        && requestButton && otpEntry && otpInput
+    ) {
+        otpInput.addEventListener("input", () => {
+            otpInput.value = otpInput.value.replace(/\D/g, "").slice(0, 6);
+        });
+        requestButton.addEventListener("click", () => {
+            if (!purposeInput.value.trim() || !requestVehicleInput.value.trim()) {
+                message.textContent = "請填寫使用目的與車輛。";
+                return;
+            }
+            if (!requestStartInput.value || !requestEndInput.value) {
+                message.textContent = "請選擇申請的開始時間與結束時間。";
+                return;
+            }
+            if (requestStartInput.value > requestEndInput.value) {
+                message.textContent = "申請的開始時間不能晚於結束時間。";
+                return;
+            }
+            requestButton.hidden = true;
+            otpEntry.hidden = false;
+            otpInput.focus();
+            message.textContent = "請輸入 Email 收到的 6 位數 OTP。此步驟目前僅為前端展示。";
+        });
+    }
 
     const availableRange = workspaceData.available_time_range;
     if (availableRange?.start && availableRange?.end) {
         const rangeStart = availableRange.start.slice(0, 19);
         const rangeEnd = availableRange.end.slice(0, 19);
-        for (const input of [startInput, endInput]) {
+        for (const input of [requestStartInput, requestEndInput, startInput, endInput]) {
             input.min = rangeStart;
             input.max = rangeEnd;
         }
+        requestStartInput.value = rangeStart;
+        requestEndInput.value = rangeEnd;
         startInput.value = rangeStart;
         endInput.value = rangeEnd;
+        requestRangeText.textContent = `可申請時間：${displayDateTime(rangeStart)} ～ ${displayDateTime(rangeEnd)}`;
         rangeText.textContent = `可查詢時間：${displayDateTime(rangeStart)} ～ ${displayDateTime(rangeEnd)}`;
     } else {
+        requestRangeText.textContent = "目前沒有可申請的模擬資料。";
+        requestButton.disabled = true;
         rangeText.textContent = "目前沒有可查詢的模擬資料。";
         buttons.forEach((button) => { button.disabled = true; });
     }

@@ -159,6 +159,9 @@ th { background: #edf3f8; white-space: nowrap; }
 .feature-card h3 { margin-top: 0; }
 .feature-card p { color: #526478; }
 .preview-actions { display: grid; gap: 10px; margin-top: 20px; }
+.otp-entry { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin-top: 20px; align-items: end; }
+.otp-entry[hidden] { display: none; }
+.otp-entry input, .otp-entry button { margin: 0; }
 #workspace-data .preview-actions button { width: 100%; margin: 0; }
 .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; margin-bottom: 24px; }
 .metric-card { padding: 20px; border: 1px solid #dbe4ee; border-radius: 12px; display: grid; gap: 8px; }

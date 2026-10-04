@@ -29,11 +29,16 @@
 <input id="vendor-0-0" type="text" placeholder="請輸入使用目的">
 <label for="vendor-0-1">車輛</label>
 <input id="vendor-0-1" type="text" placeholder="請輸入車輛">
+<p id="vendor-request-available-range">正在載入可申請時間…</p>
 <label for="vendor-0-2">開始時間</label>
-<input id="vendor-0-2" type="datetime-local">
+<input id="vendor-0-2" type="datetime-local" step="1">
 <label for="vendor-0-3">結束時間</label>
-<input id="vendor-0-3" type="datetime-local">
-<div class="preview-actions"><button type="button" data-preview>送出申請</button></div>
+<input id="vendor-0-3" type="datetime-local" step="1">
+<div class="preview-actions"><button id="vendor-request-submit" type="button">送出申請</button></div>
+<div id="vendor-otp-entry" class="otp-entry" hidden>
+<input id="vendor-otp-code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" aria-label="Email OTP" placeholder="請輸入 6 位數 OTP">
+<button type="button" data-preview>送出 OTP</button>
+</div>
 
 </section>
 <section class="feature-card">
