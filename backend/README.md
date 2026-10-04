@@ -56,6 +56,7 @@ police
 | `GET` | `/workspace/trajectories` | `owner` | 依輸入車牌與選填時間下載模糊位置或速度 CSV |
 | `GET` | `/workspace/vendor/trajectories` | `vendor` | 依車牌與必填時間下載模糊位置或精準速度 CSV |
 | `GET` | `/workspace/supervisor-a/locations` | `supervisor_a` | 依車牌與必填時間下載精準位置 CSV |
+| `GET` | `/workspace/supervisor-b/speeds` | `supervisor_b` | 依車牌與必填時間下載精準速度 CSV |
 | `POST` | `/workspace/requests` | `vendor` | 提交資料使用目的 |
 | `POST` | `/workspace/requests/{request_id}/decision` | `supervisor_a`、`supervisor_b` | 記錄該主管的核准或拒絕決定 |
 

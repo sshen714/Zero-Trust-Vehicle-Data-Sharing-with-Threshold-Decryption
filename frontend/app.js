@@ -325,6 +325,64 @@ function initializeSupervisorAWorkspace(token, workspaceData) {
 }
 
 
+function initializeSupervisorBWorkspace(token, workspaceData) {
+    const plateInput = document.getElementById("supervisor-b-plate");
+    const startInput = document.getElementById("supervisor-b-start");
+    const endInput = document.getElementById("supervisor-b-end");
+    const downloadButton = document.getElementById("supervisor-b-download");
+    if (!plateInput || !startInput || !endInput || !downloadButton) return;
+
+    downloadButton.addEventListener("click", async () => {
+        const plate = plateInput.value.trim();
+        if (!plate) {
+            message.textContent = "請先輸入車牌。";
+            plateInput.focus();
+            return;
+        }
+        if (!startInput.value || !endInput.value) {
+            message.textContent = "請選擇開始時間與結束時間。";
+            return;
+        }
+        if (startInput.value > endInput.value) {
+            message.textContent = "開始時間不能晚於結束時間。";
+            return;
+        }
+
+        const params = new URLSearchParams({
+            plate,
+            start: startInput.value,
+            end: endInput.value,
+        });
+        downloadButton.disabled = true;
+        message.textContent = "正在解密並產生精準速度 CSV…";
+        try {
+            const blob = await authenticatedDownload(
+                `/workspace/supervisor-b/speeds?${params.toString()}`,
+                token,
+            );
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "supervisor-b-speeds.csv";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+            message.textContent = "精準速度 CSV 已下載。";
+        } catch (error) {
+            if (error.status === 401) {
+                clearSession();
+                location.replace("login.html?reason=session");
+                return;
+            }
+            message.textContent = error.message;
+        } finally {
+            downloadButton.disabled = false;
+        }
+    });
+}
+
+
 async function initializePublicVisitorPage() {
     const startInput = document.getElementById("visitor-start");
     const endInput = document.getElementById("visitor-end");
@@ -515,6 +573,7 @@ async function initializeProfilePage(profile) {
         if (user.role === "owner") initializeOwnerWorkspace(token, workspaceData);
         if (user.role === "vendor") initializeVendorWorkspace(token, workspaceData);
         if (user.role === "supervisor_a") initializeSupervisorAWorkspace(token, workspaceData);
+        if (user.role === "supervisor_b") initializeSupervisorBWorkspace(token, workspaceData);
     } catch (error) {
         if (error.status === 401 || error.status === 403) {
             clearSession();

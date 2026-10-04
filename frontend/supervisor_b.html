@@ -40,13 +40,13 @@
 <section class="feature-card">
 <h3>速度資料查詢</h3>
 <p>依車牌及時間查看速度資料。</p>
-<label for="supervisor_b-1-0">車牌</label>
-<input id="supervisor_b-1-0" type="text" placeholder="請輸入車牌">
-<label for="supervisor_b-1-1">開始時間</label>
-<input id="supervisor_b-1-1" type="datetime-local">
-<label for="supervisor_b-1-2">結束時間</label>
-<input id="supervisor_b-1-2" type="datetime-local">
-<div class="preview-actions"><button type="button" data-preview>查詢速度</button></div>
+<label for="supervisor-b-plate">車牌</label>
+<input id="supervisor-b-plate" type="text" maxlength="32" autocomplete="off" placeholder="例如 V00000">
+<label for="supervisor-b-start">開始時間</label>
+<input id="supervisor-b-start" type="datetime-local" step="1">
+<label for="supervisor-b-end">結束時間</label>
+<input id="supervisor-b-end" type="datetime-local" step="1">
+<div class="preview-actions"><button id="supervisor-b-download" type="button">查詢速度</button></div>
 
 </section>
             </div>

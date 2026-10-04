@@ -463,6 +463,56 @@ def supervisor_a_locations(
         },
     )
 
+
+@router.get('/supervisor-b/speeds')
+def supervisor_b_speeds(
+    db: DbSession,
+    user: Annotated[User, Depends(require_roles(Role.SUPERVISOR_B))],
+    plate: Annotated[str, Query(min_length=1, max_length=32)],
+    start: datetime,
+    end: datetime,
+) -> Response:
+    if start.tzinfo is not None or end.tzinfo is not None:
+        raise HTTPException(422, 'Use local timestamps without a timezone offset')
+    if start > end:
+        raise HTTPException(422, 'Start must not be later than end')
+
+    plate_lookup = make_plate_lookup(plate)
+    vehicle_exists = db.scalar(
+        select(Vehicle.vehicle_id).where(Vehicle.plate_lookup == plate_lookup)
+    )
+    if vehicle_exists is None:
+        raise HTTPException(404, 'Vehicle is not available')
+
+    rows = list(db.scalars(
+        select(EncryptedTrajectory)
+        .where(
+            EncryptedTrajectory.plate_lookup == plate_lookup,
+            EncryptedTrajectory.timestamp >= start,
+            EncryptedTrajectory.timestamp <= end,
+        )
+        .order_by(EncryptedTrajectory.timestamp, EncryptedTrajectory.id)
+    ))
+    rows = list({row.timestamp: row for row in rows}.values())
+
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['timestamp', 'speed_kmh'])
+    for row in rows:
+        writer.writerow([
+            row.timestamp.isoformat(sep=' '),
+            f'{decrypt_speed(row.speed_enc):.1f}',
+        ])
+
+    return Response(
+        content='\ufeff' + output.getvalue(),
+        media_type='text/csv; charset=utf-8',
+        headers={
+            'Cache-Control': 'no-store',
+            'Content-Disposition': 'attachment; filename="supervisor-b-speeds.csv"',
+        },
+    )
+
 class RequestInput(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
     purpose: str = Field(min_length=10, max_length=500)
