@@ -778,7 +778,58 @@ function initializeSupervisorBWorkspace(token, workspaceData) {
 }
 
 
+function initializeAdminAccountLookup(token) {
+    const form = document.getElementById("admin-account-form");
+    const input = document.getElementById("admin-0-0");
+    const button = document.getElementById("admin-account-submit");
+    const result = document.getElementById("admin-account-result");
+    const usernameText = document.getElementById("admin-account-username");
+    const roleText = document.getElementById("admin-account-role");
+    const emailText = document.getElementById("admin-account-email");
+    const statusText = document.getElementById("admin-account-message");
+    if (!form || !input || !button || !result || !usernameText
+        || !roleText || !emailText || !statusText) return;
+
+    input.addEventListener("input", () => {
+        result.hidden = true;
+        statusText.textContent = "";
+    });
+    form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (button.disabled) return;
+        result.hidden = true;
+        const username = input.value.trim();
+        if (!username) {
+            statusText.textContent = "請輸入帳號（username）。";
+            input.focus();
+            return;
+        }
+        button.disabled = true;
+        input.disabled = true;
+        statusText.textContent = "正在查詢帳號…";
+        try {
+            const params = new URLSearchParams({username});
+            const account = await authenticatedRequest(`/users/lookup?${params}`, token);
+            usernameText.textContent = account.username;
+            roleText.textContent = ROLE_PAGES[account.role]?.label
+                || (account.role === "visitor" ? "訪客" : account.role);
+            emailText.textContent = account.email;
+            result.hidden = false;
+            statusText.textContent = "查詢完成。";
+        } catch (error) {
+            statusText.textContent = error.status === 404
+                ? "找不到此帳號，請確認輸入的是完整的 username。"
+                : error.message;
+        } finally {
+            button.disabled = false;
+            input.disabled = false;
+        }
+    });
+}
+
+
 function initializeAdminWorkspace(token, workspaceData) {
+    initializeAdminAccountLookup(token);
     const memberCount = document.getElementById("admin-member-count");
     const vehicleCount = document.getElementById("admin-vehicle-count");
     const roleCount = document.getElementById("admin-role-count");

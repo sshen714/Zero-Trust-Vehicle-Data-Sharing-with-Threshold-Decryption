@@ -20,7 +20,7 @@ from .auth import (
 from .database import engine
 from .dependencies import CurrentUser, DbSession, require_roles
 from .models import Role, User
-from .schemas import TokenResponse, UserResponse
+from .schemas import AccountLookupResponse, TokenResponse, UserResponse
 from .workspace import public_router, router as workspace_router
 
 
@@ -113,3 +113,19 @@ def list_users(
     response.headers["Cache-Control"] = "no-store"
     users = db.scalars(select(User).order_by(User.id).offset(offset).limit(limit))
     return list(users.all())
+
+
+@app.get("/users/lookup", response_model=AccountLookupResponse)
+def lookup_user(
+    db: DbSession,
+    admin_user: Annotated[User, Depends(require_roles(Role.ADMIN))],
+    response: Response,
+    username: Annotated[str, Query(min_length=1, max_length=50)],
+) -> User:
+    """Look up one account by username, for administrators only."""
+    del admin_user
+    response.headers["Cache-Control"] = "no-store"
+    user = db.scalar(select(User).where(User.username == username.strip()))
+    if user is None:
+        raise HTTPException(status_code=404, detail="Account is not available")
+    return user

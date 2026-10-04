@@ -50,6 +50,16 @@ class UserResponse(BaseModel):
     created_at: datetime
 
 
+class AccountLookupResponse(BaseModel):
+    """Account details available through the administrator lookup."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    username: str
+    email: EmailStr
+    role: Role
+
+
 class TokenResponse(BaseModel):
     """Response returned after a successful login."""
 

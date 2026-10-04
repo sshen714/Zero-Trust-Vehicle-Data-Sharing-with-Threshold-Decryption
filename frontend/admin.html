@@ -18,7 +18,7 @@
         <section id="workspace" hidden aria-label="系統管理者工作區">
             <h2>系統管理者工作區</h2>
             <p>維護帳號、網站與資料查詢</p>
-            <p class="preview-notice">介面展示：以下內容與操作尚未連接資料查詢、申請、審核或 OTP 服務。</p>
+            <p class="preview-notice">OTP 申請目前僅提供介面展示，尚未串接。</p>
             <ul class="access-list"><li>可依車牌、時間、位置與速度查詢</li><li>位置與速度預設模糊</li><li>A OTP 解鎖位置；B OTP 解鎖速度</li></ul>
             <div class="metric-grid"><div class="metric-card"><span>網站狀態</span>
 <div class="metric-details" id="admin-site-status">
@@ -30,11 +30,18 @@
             <div class="role-grid">
 <section class="feature-card">
 <h3>帳號管理</h3>
-<p>查看帳號、身份與啟用狀態。</p>
+<p>輸入帳號（username），查看身分與 email。</p>
+<form id="admin-account-form">
 <label for="admin-0-0">帳號</label>
-<input id="admin-0-0" type="text" placeholder="請輸入帳號">
-<div class="preview-actions"><button type="button" data-preview>查看帳號</button></div>
-
+<input id="admin-0-0" name="username" type="text" maxlength="50" autocomplete="off" placeholder="請輸入帳號" required>
+<div class="preview-actions"><button id="admin-account-submit" type="submit">查看帳號</button></div>
+</form>
+<div id="admin-account-result" hidden>
+<p class="account-row"><span>帳號</span><strong id="admin-account-username"></strong></p>
+<p class="account-row"><span>身分</span><strong id="admin-account-role"></strong></p>
+<p class="account-row"><span>Email</span><strong id="admin-account-email"></strong></p>
+</div>
+<p id="admin-account-message" role="status" aria-live="polite"></p>
 </section>
 <section class="feature-card">
 <h3>資料查詢</h3>
