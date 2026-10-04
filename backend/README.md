@@ -61,7 +61,8 @@ police
 | `GET` | `/workspace/supervisor-b/speeds` | `supervisor_b` | 依車牌與必填時間下載精準速度 CSV |
 | `GET` | `/workspace/admin/trajectories` | `admin` | 依車牌或速度範圍與必填時間下載模糊軌跡 CSV |
 | `GET` | `/workspace/researcher/trajectories` | `researcher` | 依必填時間下載套用完整 PETs 的研究 CSV |
-| `POST` | `/workspace/requests` | `vendor` | 提交資料使用目的 |
+| `POST` | `/workspace/vendor/location-requests` | `vendor` | 建立精準位置申請並在 Demo 模式產生 OTP |
+| `POST` | `/workspace/vendor/location-requests/{request_id}/verify-otp` | `vendor` | 驗證本人申請的單次 OTP 並下載精準位置 CSV |
 | `POST` | `/workspace/requests/{request_id}/decision` | `supervisor_a`、`supervisor_b` | 記錄該主管的核准或拒絕決定 |
 
 `GET /workspace` 目前依角色回傳以下資料：
@@ -82,6 +83,8 @@ police
 公開平均速度會先依 `(plate_lookup, timestamp)` 去除重複模擬紀錄，計算每台車在所選時間內的平均速度，再平均所有車輛的結果。回應只包含 `average_speed_kmh`；少於三台車時回傳 `null`，不公開車輛數、單車速度、位置、軌跡或密文。
 
 資料申請分別保存主管 A 與主管 B 的決定。任一主管拒絕時狀態為 `rejected`；兩者都核准時為 `approved`；其他情況為 `pending`。同一主管不能重複修改已記錄的決定。
+
+合作廠商位置 OTP 目前是本機 Demo 流程：送出申請時建立 `data_requests` 與只含雜湊的 `otp_challenges`，OTP 五分鐘有效、最多錯誤五次且成功後不可重複使用。OTP 雜湊同時綁定車牌查詢碼與起訖時間，變更任一條件都無法通過驗證；成功後直接下載該範圍的精準位置 CSV。為方便尚未設定 SMTP 的本機驗證，原始 OTP 會暫時在建立申請的 API 回應中回傳；正式寄信前必須移除 `demo_otp`。
 
 ## 資料模型
 

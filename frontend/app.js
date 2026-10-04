@@ -82,6 +82,37 @@ async function authenticatedDownload(path, token) {
 }
 
 
+async function authenticatedPostDownload(path, token, body) {
+    let response;
+    try {
+        response = await fetch(`${API_BASE}${path}`, {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body),
+            cache: "no-store",
+            signal: AbortSignal.timeout(30000),
+        });
+    } catch {
+        throw new Error("無法連線至後端，或下載等待時間過長。");
+    }
+
+    if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        const error = new Error(
+            typeof data?.detail === "string"
+                ? data.detail
+                : "後端無法驗證 OTP 或產生 CSV。"
+        );
+        error.status = response.status;
+        throw error;
+    }
+    return response.blob();
+}
+
+
 function displayDateTime(value) {
     const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/.exec(value);
     if (!match) return value;
@@ -178,6 +209,7 @@ function initializeVendorWorkspace(token, workspaceData) {
     const requestButton = document.getElementById("vendor-request-submit");
     const otpEntry = document.getElementById("vendor-otp-entry");
     const otpInput = document.getElementById("vendor-otp-code");
+    const otpButton = document.getElementById("vendor-otp-submit");
     const plateInput = document.getElementById("vendor-plate");
     const startInput = document.getElementById("vendor-start");
     const endInput = document.getElementById("vendor-end");
@@ -185,19 +217,20 @@ function initializeVendorWorkspace(token, workspaceData) {
     const buttons = [...document.querySelectorAll("[data-vendor-export]")];
     if (
         !purposeInput || !requestVehicleInput || !requestStartInput || !requestEndInput
-        || !requestRangeText || !requestButton || !otpEntry || !otpInput
+        || !requestRangeText || !requestButton || !otpEntry || !otpInput || !otpButton
         || !plateInput || !startInput || !endInput || !rangeText || !buttons.length
     ) return;
 
     if (
         purposeInput && requestVehicleInput && requestStartInput && requestEndInput
         && requestRangeText
-        && requestButton && otpEntry && otpInput
+        && requestButton && otpEntry && otpInput && otpButton
     ) {
+        let requestId = null;
         otpInput.addEventListener("input", () => {
             otpInput.value = otpInput.value.replace(/\D/g, "").slice(0, 6);
         });
-        requestButton.addEventListener("click", () => {
+        requestButton.addEventListener("click", async () => {
             if (!purposeInput.value.trim() || !requestVehicleInput.value.trim()) {
                 message.textContent = "請填寫使用目的與車輛。";
                 return;
@@ -210,10 +243,82 @@ function initializeVendorWorkspace(token, workspaceData) {
                 message.textContent = "申請的開始時間不能晚於結束時間。";
                 return;
             }
-            requestButton.hidden = true;
-            otpEntry.hidden = false;
-            otpInput.focus();
-            message.textContent = "請輸入 Email 收到的 6 位數 OTP。此步驟目前僅為前端展示。";
+            requestButton.disabled = true;
+            message.textContent = "正在建立精準位置申請與 Demo OTP…";
+            try {
+                const result = await authenticatedRequest(
+                    "/workspace/vendor/location-requests",
+                    token,
+                    {
+                        method: "POST",
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify({
+                            purpose: purposeInput.value.trim(),
+                            plate: requestVehicleInput.value.trim(),
+                            start: requestStartInput.value,
+                            end: requestEndInput.value,
+                        }),
+                    },
+                );
+                requestId = result.request_id;
+                requestButton.hidden = true;
+                otpEntry.hidden = false;
+                otpInput.focus();
+                message.textContent = `Demo OTP：${result.demo_otp}（5 分鐘內有效）`;
+            } catch (error) {
+                if (error.status === 401) {
+                    clearSession();
+                    location.replace("login.html?reason=session");
+                    return;
+                }
+                message.textContent = error.message;
+            } finally {
+                requestButton.disabled = false;
+            }
+        });
+        otpButton.addEventListener("click", async () => {
+            if (!Number.isInteger(requestId)) {
+                message.textContent = "請先送出申請。";
+                return;
+            }
+            if (!/^\d{6}$/.test(otpInput.value)) {
+                message.textContent = "請輸入完整的 6 位數 OTP。";
+                return;
+            }
+            otpButton.disabled = true;
+            message.textContent = "正在驗證 OTP…";
+            try {
+                const blob = await authenticatedPostDownload(
+                    `/workspace/vendor/location-requests/${requestId}/verify-otp`,
+                    token,
+                    {
+                        otp: otpInput.value,
+                        plate: requestVehicleInput.value.trim(),
+                        start: requestStartInput.value,
+                        end: requestEndInput.value,
+                    },
+                );
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = "vendor-authorized-locations.csv";
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(url);
+                otpInput.disabled = true;
+                otpButton.hidden = true;
+                message.textContent = "OTP 驗證成功，精準位置 CSV 已下載。";
+            } catch (error) {
+                if (error.status === 401) {
+                    clearSession();
+                    location.replace("login.html?reason=session");
+                    return;
+                }
+                message.textContent = error.message;
+            } finally {
+                otpButton.disabled = false;
+            }
         });
     }
 
