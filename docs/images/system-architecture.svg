@@ -27,7 +27,7 @@
 <rect x="445" y="485" width="310" height="115" rx="12" fill="#fff" stroke="#a5bad2"/>
 <text x="600.0" y="514" text-anchor="middle" class="label">角色工作區 API</text>
 <text x="600.0" y="540" text-anchor="middle" class="detail">workspace.py</text>
-<text x="600.0" y="563" text-anchor="middle" class="detail">車主綁定、資料篩選、Demo OTP</text>
+<text x="600.0" y="563" text-anchor="middle" class="detail">車主綁定、資料篩選、Email OTP</text>
 <rect x="65" y="485" width="310" height="115" rx="12" fill="#fff" stroke="#a5bad2"/>
 <text x="220.0" y="514" text-anchor="middle" class="label">資料存取層</text>
 <text x="220.0" y="540" text-anchor="middle" class="detail">database.py / models.py</text>
@@ -74,4 +74,4 @@
 <text x="410" y="789" class="note">加密寫入 MySQL</text>
 <path d="M600 640V615M445 692H375M600 745V825M755 692H785V575H825" fill="none" stroke="#8c70b2" stroke-width="2" stroke-dasharray="6 5"/>
 <text x="600" y="976" text-anchor="middle" class="note">實線：請求／資料流　　紫色虛線：設定與密鑰供應</text>
-<text x="600" y="1003" text-anchor="middle" class="note">Demo OTP 由 API 回傳；尚未寄送 Email、串接主管核准或實作門檻解密。</text></svg>
+<text x="600" y="1003" text-anchor="middle" class="note">Email OTP 由 Gmail API／SMTP 寄送；尚未串接主管核准或實作門檻解密。</text></svg>

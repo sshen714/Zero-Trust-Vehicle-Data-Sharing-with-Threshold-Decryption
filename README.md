@@ -62,7 +62,7 @@ Zero-Trust-Vehicle-Data-Sharing-with-Threshold-Decryption/
 
 登入憑證存於瀏覽器本分頁的 `sessionStorage`；受保護 API 每次都從資料庫重新確認帳號狀態與角色。車主查詢另檢查所有權綁定，公開統計不需要 JWT。資料庫保存分欄密文，後端在記憶體中解密、處理後回傳 JSON 或 CSV。
 
-車主本人下載 OTP 已接上 Email 寄送，API 不回傳車主驗證碼；其他角色與精準欄位授權目前仍使用 Demo OTP。尚未串接實際主管核准流程。專案名稱包含 Threshold Decryption，但目前實作是三把獨立 AES 金鑰與角色授權，尚未實作門檻解密。
+車主本人下載 OTP 已接上 Email 寄送，API 不回傳車主驗證碼；所有已實作 OTP 的角色與精準欄位申請均使用 Email 驗證。尚未串接實際主管核准流程。專案名稱包含 Threshold Decryption，但目前實作是三把獨立 AES 金鑰與角色授權，尚未實作門檻解密。
 
 ## 1. Clone 後安裝 Python 3.11 與專案套件
 
@@ -317,38 +317,38 @@ vehicle_data_sharing.encrypted_trajectories
 | --- | --- | --- |
 | 車主 | `demo_owner` | 輸入本人綁定車牌與選填時間，下載模糊位置或模糊速度 CSV |
 | 訪客 | 不需帳號 | 選擇時間後只顯示所有車輛的整體平均速度 |
-| 合作廠商 | `demo_vendor` | 依車牌與時間下載模糊位置或精準速度 CSV；Demo OTP 驗證後下載精準位置 |
-| 主管 A | `demo_supervisor_a` | 依車牌與時間下載精準位置 CSV；Demo OTP 驗證後下載精準速度 |
-| 主管 B | `demo_supervisor_b` | 依車牌與時間下載精準速度 CSV；Demo OTP 驗證後下載精準位置 |
-| 系統管理者 | `demo_admin` | 帳號查詢、會員／車輛／身分數、模糊資料 CSV 與精準資料 Demo OTP |
+| 合作廠商 | `demo_vendor` | 依車牌與時間下載模糊位置或精準速度 CSV；Email OTP 驗證後下載精準位置 |
+| 主管 A | `demo_supervisor_a` | 依車牌與時間下載精準位置 CSV；Email OTP 驗證後下載精準速度 |
+| 主管 B | `demo_supervisor_b` | 依車牌與時間下載精準速度 CSV；Email OTP 驗證後下載精準位置 |
+| 系統管理者 | `demo_admin` | 帳號查詢、會員／車輛／身分數、模糊資料 CSV 與精準資料 Email OTP |
 | 交通研究者 | `demo_researcher` | 依時間下載經 PETs 處理的研究 CSV，不提供車牌篩選 |
-| 警方 | `demo_police` | 模糊資料按鈕仍為展示；精準位置／速度 Demo OTP 與 CSV 下載已串接 |
+| 警方 | `demo_police` | 模糊資料按鈕仍為展示；精準位置／速度 Email OTP 與 CSV 下載已串接 |
 
 操作方式：開啟 `http://127.0.0.1:5500/login.html`；訪客直接點選「訪客」，其他身份輸入測試帳號。車主可下載本人綁定車輛的模糊位置或速度 CSV；公開訪客只能查詢整體平均速度，沒有下載功能。
 
 後端每次受保護請求都重新查詢帳號角色及啟用狀態。訪客不建立帳號，公開註冊 API 已移除。
 
-此版本使用三把獨立的 AES-256-GCM 金鑰分欄保護車牌、位置與速度。授權設計不採用門檻解密或主管 A、B 共同重建金鑰：主管 A 負責精準位置的授權，主管 B 負責精準速度的授權，兩種資料各自驗證，不要求兩位主管同時同意。警方可依車牌與時間分別申請精準位置或精準速度 Demo OTP，驗證後下載對應 CSV；目前原始 OTP 仍由 API 回傳，尚未寄送 Email。資料筆數少時，彙總值仍不等同匿名化保證。
+此版本使用三把獨立的 AES-256-GCM 金鑰分欄保護車牌、位置與速度。授權設計不採用門檻解密或主管 A、B 共同重建金鑰：主管 A 負責精準位置的授權，主管 B 負責精準速度的授權，兩種資料各自驗證，不要求兩位主管同時同意。警方可依車牌與時間分別申請精準位置或精準速度 Email OTP，驗證後下載對應 CSV；驗證碼透過 Email 寄送，API 不回傳原始 OTP。資料筆數少時，彙總值仍不等同匿名化保證。
 
 交通統計及每日分析使用 `encrypted_trajectories`，後端只在記憶體中解密計算所需欄位。車主使用 `GET /workspace/trajectories` 輸入車牌；後端計算 `plate_lookup`、檢查 `vehicle_ownerships`，再查詢加密軌跡。目前車主本人下載 OTP 申請需提供完整起訖時間，包含端點且不帶時區。位置 CSV 會在記憶體副本中切分行程，每趟首尾至少移除 200～500 公尺及 1 分鐘；每趟行程的經緯度分別使用由伺服器密鑰穩定產生、介於 `±0.0005°` 的固定偏移，使近似軌跡保留相對移動且不公開上下限。時間篩選在 PETs 處理後才套用。速度 CSV 採 10 km/h 區間（不含上限）。處理過程不會回寫或修改 `encrypted_trajectories`。資料申請使用 `data_requests`，OTP 驗證狀態使用只保存雜湊的 `otp_challenges`。六張資料表統一定義於 `backend/models.py`，由 `scripts/create_table.py` 建立。
 
-合作廠商使用 `GET /workspace/vendor/trajectories` 依車牌與必填時間範圍下載資料。位置 CSV 套用與車主分離的固定 PETs 偏移並去除行程首尾；速度 CSV 回傳解密後的精準速度。兩種 CSV 都不包含車牌、`plate_lookup` 或密文。右側查詢下載與左側 Demo OTP 都已串接，但右側查詢尚未強制連結資料使用申請或實際主管核准。
+合作廠商使用 `GET /workspace/vendor/trajectories` 依車牌與必填時間範圍下載資料。位置 CSV 套用與車主分離的固定 PETs 偏移並去除行程首尾；速度 CSV 回傳解密後的精準速度。兩種 CSV 都不包含車牌、`plate_lookup` 或密文。右側查詢下載與左側 Email OTP 都已串接，但右側查詢尚未強制連結資料使用申請或實際主管核准。
 
-合作廠商左側已提供 OTP 模擬：建立位置申請時產生六位數 OTP，資料庫只暫存同時綁定車牌與時間範圍的 HMAC-SHA256 雜湊、五分鐘期限與錯誤次數。驗證成功會立即下載核准條件的精準位置 CSV 並刪除 OTP 紀錄；過期或達到錯誤上限的 OTP 也會在存取時清除。Demo 期間 API 會回傳原始 OTP 供本機輸入測試，目前尚未寄送 Email。
+合作廠商左側已提供 Email OTP 流程：建立位置申請時產生六位數 OTP，資料庫只暫存同時綁定車牌與時間範圍的 HMAC-SHA256 雜湊、五分鐘期限與錯誤次數。驗證成功會立即下載核准條件的精準位置 CSV 並刪除 OTP 紀錄；過期或達到錯誤上限的 OTP 也會在存取時清除。API 寄送 Email，回傳寄送方式與收件地址，不回傳原始 OTP。
 
 主管 A 使用 `GET /workspace/supervisor-a/locations` 依車牌與必填時間範圍下載精準位置 CSV。端點只允許 `supervisor_a`，並且只解密位置；CSV 不包含車牌、`plate_lookup`、速度或密文。
 
-主管 A 左側已提供精準速度 OTP 模擬。OTP 雜湊綁定車牌與時間範圍，五分鐘內最多嘗試五次；驗證成功後立即下載精準速度 CSV 並刪除 OTP 紀錄，過期或達到錯誤上限時也會在存取時清除。Demo 期間 API 會回傳原始 OTP 供本機測試，目前尚未寄送 Email。
+主管 A 左側已提供精準速度 Email OTP 流程。OTP 雜湊綁定車牌與時間範圍，五分鐘內最多嘗試五次；驗證成功後立即下載精準速度 CSV 並刪除 OTP 紀錄，過期或達到錯誤上限時也會在存取時清除。API 寄送 Email，回傳寄送方式與收件地址，不回傳原始 OTP。
 
 主管 B 使用 `GET /workspace/supervisor-b/speeds` 依車牌與必填時間範圍下載精準速度 CSV。端點只允許 `supervisor_b`，並且只解密速度；CSV 不包含車牌、`plate_lookup`、位置或密文。
 
-主管 B 左側已提供精準位置 OTP 模擬。OTP 雜湊綁定車牌與時間範圍，五分鐘內最多嘗試五次；驗證成功後立即下載精準位置 CSV 並刪除 OTP 紀錄，過期或達到錯誤上限時也會在存取時清除。Demo 期間 API 會回傳原始 OTP 供本機測試，目前尚未寄送 Email。
+主管 B 左側已提供精準位置 Email OTP 流程。OTP 雜湊綁定車牌與時間範圍，五分鐘內最多嘗試五次；驗證成功後立即下載精準位置 CSV 並刪除 OTP 紀錄，過期或達到錯誤上限時也會在存取時清除。API 寄送 Email，回傳寄送方式與收件地址，不回傳原始 OTP。
 
-車主、合作廠商、主管 A、主管 B 與系統管理者下載原有權限內的檔案前，另需通過本人下載 OTP。OTP 綁定登入帳號 ID、email、角色及完整查詢條件，五分鐘有效、最多錯誤五次且只允許一次下載。原本的直接下載 API 已移除；公開訪客沒有帳號 email，交通研究者依目前規則不要求本人下載 OTP。車主目前改為 Email 寄送，回應只含寄送方式與收件 email，不含原始 OTP；其他角色的本人下載仍回傳 Demo OTP。
+車主、合作廠商、主管 A、主管 B 與系統管理者下載原有權限內的檔案前，另需通過本人下載 OTP。OTP 綁定登入帳號 ID、email、角色及完整查詢條件，五分鐘有效、最多錯誤五次且只允許一次下載。原本的直接下載 API 已移除；公開訪客沒有帳號 email，交通研究者依目前規則不要求本人下載 OTP。車主目前改為 Email 寄送，回應只含寄送方式與收件 email，不含原始 OTP；其他角色的本人下載也透過 Email 寄送，不回傳原始 OTP。
 
 系統管理者使用 `GET /workspace/admin/trajectories` 依必填時間與車牌篩選資料，可另加完整速度範圍。後端解密後套用速度條件，再輸出已去除行程首尾的模糊位置與 10 km/h 速度區間 CSV；CSV 不包含車牌、`plate_lookup`、精準位置、精準速度或密文。
 
-系統管理者的 OTP 申請可選精準位置或精準速度，車牌必填，時間範圍選填。未填時間時使用該車目前完整資料時間；查不到可下載資料時回傳錯誤，不產生空 CSV。Demo OTP 綁定資料類型及申請範圍，五分鐘有效、最多錯誤五次，驗證成功即下載對應精準 CSV 並刪除 OTP 紀錄。此版本仍由 API 回傳 Demo OTP，尚未寄送 Email 或串接主管核准。
+系統管理者的 OTP 申請可選精準位置或精準速度，車牌必填，時間範圍選填。未填時間時使用該車目前完整資料時間；查不到可下載資料時回傳錯誤，不產生空 CSV。Email OTP 綁定資料類型及申請範圍，五分鐘有效、最多錯誤五次，驗證成功即下載對應精準 CSV 並刪除 OTP 紀錄。驗證碼已透過 Email 寄送，尚未串接實際主管核准。
 
 交通研究者使用 `GET /workspace/researcher/trajectories` 依必填時間範圍下載研究 CSV。後端先對完整資料套用 `apply_researcher_pets()`，包含行程首尾去除、假名與靜默期、位置偏移、降低頻率、`coarsen_time()` 時間粗化及速度取整，再依時間範圍輸出；不提供車牌查詢或精準欄位。
 
@@ -405,7 +405,7 @@ PYCODE
 
 ### 目前實作範圍
 
-車主本人下載流程已支援 Gmail API 與 SMTP 寄信，API 不再回傳車主原始驗證碼。OTP 六位數、五分鐘有效、最多錯誤五次，驗證成功後下載 CSV 並刪除 OTP 紀錄。寄信失敗回傳 503，回滾本次申請與 OTP 紀錄。其他角色仍使用 Demo OTP；主管核准與寄信頻率限制尚未實作。
+車主本人下載流程已支援 Gmail API 與 SMTP 寄信，API 不再回傳車主原始驗證碼。OTP 六位數、五分鐘有效、最多錯誤五次，驗證成功後下載 CSV 並刪除 OTP 紀錄。寄信失敗回傳 503，回滾本次申請與 OTP 紀錄。其他已實作 OTP 的角色也統一使用 Email 驗證；主管核准與寄信頻率限制尚未實作。
 
 ### 寄件憑證由誰持有？
 
@@ -469,7 +469,7 @@ SMTP_FROM=your-sender@example.com
 
 ### 收件地址與驗證
 
-預設寄到帳號的 `users.email`。本機測試可設定 `OTP_DEFAULT_EMAIL`；主管收件覆寫另有 `OTP_SUPERVISOR_A_EMAIL` 與 `OTP_SUPERVISOR_B_EMAIL`，留白時使用帳號 email。覆寫不修改帳號 email 的唯一性，也不表示主管寄信流程已完成。正式使用前應移除共用測試收件覆寫，使車主收到自己的驗證碼。
+預設寄到帳號的 `users.email`。本機測試可設定 `OTP_DEFAULT_EMAIL`；主管收件覆寫另有 `OTP_SUPERVISOR_A_EMAIL` 與 `OTP_SUPERVISOR_B_EMAIL`，留白時使用帳號 email。覆寫不修改帳號 email 的唯一性，此設定依申請者角色選擇收件地址，不會代替主管核准。正式使用前應移除共用測試收件覆寫，使車主收到自己的驗證碼。
 
 重啟後端，以車主帳號登入並申請下載。確認頁面顯示寄送地址，到該信箱取得 OTP，五分鐘內輸入並下載。API 成功只表示寄信服務接受請求，不代表已進入收件匣；未收到時檢查垃圾郵件、所有郵件與寄件帳號的寄件備份。
 

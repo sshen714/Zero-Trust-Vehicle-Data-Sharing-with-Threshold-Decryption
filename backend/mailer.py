@@ -1,4 +1,4 @@
-"""Deliver one-time download codes through authenticated, encrypted SMTP."""
+"""Deliver one-time codes through Gmail API or encrypted SMTP."""
 import os
 import smtplib
 import ssl

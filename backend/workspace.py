@@ -771,6 +771,18 @@ class OtpVerificationInput(BaseModel):
     end: datetime
 
 
+def deliver_otp_and_commit(db, user, otp: str) -> str:
+    recipient = otp_recipient(user.role.value, user.email)
+    try:
+        db.flush()
+        send_download_otp(recipient, otp)
+    except OtpDeliveryError:
+        db.rollback()
+        raise HTTPException(503, '驗證碼寄送失敗，請稍後重新申請。') from None
+    db.commit()
+    return recipient
+
+
 def utc_now_naive() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -939,21 +951,14 @@ def submit_personal_download_request(
         otp_hash=personal_download_digest(request_row.id, otp, user, data),
         expires_at=expires_at,
     ))
-    if user.role == Role.OWNER:
-        try:
-            db.flush()
-            send_download_otp(otp_recipient(user.role.value, user.email), otp)
-        except OtpDeliveryError:
-            db.rollback()
-            raise HTTPException(503, '驗證碼寄送失敗，請確認寄信設定後再試。') from None
-    db.commit()
+    recipient = deliver_otp_and_commit(db, user, otp)
     response.headers['Cache-Control'] = 'no-store'
     response.headers['Pragma'] = 'no-cache'
     return {
         'request_id': request_row.id,
         'expires_at': expires_at,
-        **({'delivery': 'email'} if user.role == Role.OWNER else {'demo_otp': otp}),
-        'recipient_email': otp_recipient(user.role.value, user.email),
+        'delivery': 'email',
+        'recipient_email': recipient,
     }
 
 
@@ -1069,7 +1074,7 @@ def submit_vendor_location_request(
         ),
         expires_at=expires_at,
     ))
-    db.commit()
+    recipient = deliver_otp_and_commit(db, user, otp)
 
     response.headers['Cache-Control'] = 'no-store'
     response.headers['Pragma'] = 'no-cache'
@@ -1077,7 +1082,8 @@ def submit_vendor_location_request(
     return {
         'request_id': request_row.id,
         'expires_at': expires_at,
-        'demo_otp': otp,
+        'delivery': 'email',
+        'recipient_email': recipient,
     }
 
 
@@ -1238,14 +1244,15 @@ def submit_supervisor_a_speed_request(
         ),
         expires_at=expires_at,
     ))
-    db.commit()
+    recipient = deliver_otp_and_commit(db, user, otp)
 
     response.headers['Cache-Control'] = 'no-store'
     response.headers['Pragma'] = 'no-cache'
     return {
         'request_id': request_row.id,
         'expires_at': expires_at,
-        'demo_otp': otp,
+        'delivery': 'email',
+        'recipient_email': recipient,
     }
 
 
@@ -1405,14 +1412,15 @@ def submit_supervisor_b_location_request(
         ),
         expires_at=expires_at,
     ))
-    db.commit()
+    recipient = deliver_otp_and_commit(db, user, otp)
 
     response.headers['Cache-Control'] = 'no-store'
     response.headers['Pragma'] = 'no-cache'
     return {
         'request_id': request_row.id,
         'expires_at': expires_at,
-        'demo_otp': otp,
+        'delivery': 'email',
+        'recipient_email': recipient,
     }
 
 
@@ -1602,13 +1610,14 @@ def submit_scoped_otp_request(
         ),
         expires_at=expires_at,
     ))
-    db.commit()
+    recipient = deliver_otp_and_commit(db, user, otp)
     response.headers['Cache-Control'] = 'no-store'
     response.headers['Pragma'] = 'no-cache'
     return {
         'request_id': request_row.id,
         'expires_at': expires_at,
-        'demo_otp': otp,
+        'delivery': 'email',
+        'recipient_email': recipient,
         'plate': data.plate,
         'start': start,
         'end': end,

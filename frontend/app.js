@@ -209,9 +209,7 @@ async function requestPersonalDownloadOtp(token, payload, filename, buttons) {
             }
         });
         input.focus();
-        message.textContent = request.delivery === "email"
-            ? `驗證碼已寄至 ${request.recipient_email}，請於 5 分鐘內輸入。`
-            : `Demo OTP：${request.demo_otp}（寄送對象：${request.recipient_email}，5 分鐘內有效）`;
+        message.textContent = `驗證碼已寄至 ${request.recipient_email}，請於 5 分鐘內輸入。`;
     } catch (error) {
         if (error.status === 401) {
             clearSession();
@@ -335,7 +333,7 @@ function initializeVendorWorkspace(token, workspaceData) {
                 return;
             }
             requestButton.disabled = true;
-            message.textContent = "正在建立精準位置申請與 Demo OTP…";
+            message.textContent = "正在建立精準位置申請與 Email OTP…";
             try {
                 const result = await authenticatedRequest(
                     "/workspace/vendor/location-requests",
@@ -355,7 +353,7 @@ function initializeVendorWorkspace(token, workspaceData) {
                 requestButton.hidden = true;
                 otpEntry.hidden = false;
                 otpInput.focus();
-                message.textContent = `Demo OTP：${result.demo_otp}（5 分鐘內有效）`;
+                message.textContent = `驗證碼已寄至 ${result.recipient_email}，請於 5 分鐘內輸入。`;
             } catch (error) {
                 if (error.status === 401) {
                     clearSession();
@@ -504,7 +502,7 @@ function initializeSupervisorAWorkspace(token, workspaceData) {
             return;
         }
         requestButton.disabled = true;
-        message.textContent = "正在建立精準速度申請與 Demo OTP…";
+        message.textContent = "正在建立精準速度申請與 Email OTP…";
         try {
             const result = await authenticatedRequest(
                 "/workspace/supervisor-a/speed-requests",
@@ -524,7 +522,7 @@ function initializeSupervisorAWorkspace(token, workspaceData) {
             requestButton.hidden = true;
             otpEntry.hidden = false;
             otpInput.focus();
-            message.textContent = `Demo OTP：${result.demo_otp}（5 分鐘內有效）`;
+            message.textContent = `驗證碼已寄至 ${result.recipient_email}，請於 5 分鐘內輸入。`;
         } catch (error) {
             if (error.status === 401) {
                 clearSession();
@@ -669,7 +667,7 @@ function initializeSupervisorBWorkspace(token, workspaceData) {
             return;
         }
         requestButton.disabled = true;
-        message.textContent = "正在建立精準位置申請與 Demo OTP…";
+        message.textContent = "正在建立精準位置申請與 Email OTP…";
         try {
             const result = await authenticatedRequest(
                 "/workspace/supervisor-b/location-requests",
@@ -689,7 +687,7 @@ function initializeSupervisorBWorkspace(token, workspaceData) {
             requestButton.hidden = true;
             otpEntry.hidden = false;
             otpInput.focus();
-            message.textContent = `Demo OTP：${result.demo_otp}（5 分鐘內有效）`;
+            message.textContent = `驗證碼已寄至 ${result.recipient_email}，請於 5 分鐘內輸入。`;
         } catch (error) {
             if (error.status === 401) {
                 clearSession();
@@ -936,7 +934,7 @@ function initializeAdminOtpWorkspace(token, workspaceData) {
             otpButton.hidden = false;
             otpLabel.textContent = dataType === "location" ? "主管 A OTP（精準位置）" : "主管 B OTP（精準速度）";
             otpEntry.hidden = false;
-            statusText.textContent = `Demo OTP：${result.demo_otp}（5 分鐘內有效）。範圍：${result.plate || "所有車輛"}，${displayDateTime(result.start)} ～ ${displayDateTime(result.end)}`;
+            statusText.textContent = `驗證碼已寄至 ${result.recipient_email}，請於 5 分鐘內輸入。。範圍：${result.plate || "所有車輛"}，${displayDateTime(result.start)} ～ ${displayDateTime(result.end)}`;
         } catch (error) {
             if (error.status === 401) {
                 clearSession();
@@ -1400,7 +1398,7 @@ async function initializePoliceOtpWorkspace(token) {
         const dataType = event.submitter?.value === "speed" ? "speed" : "location";
         const dataLabel = dataType === "speed" ? "精準速度" : "精準位置";
         setBusy(true);
-        statusText.textContent = `正在建立${dataLabel}申請與 Demo OTP…`;
+        statusText.textContent = `正在建立${dataLabel}申請與 Email OTP…`;
         try {
             const result = await authenticatedRequest(
                 `/workspace/police/${dataType}-requests`,
@@ -1420,7 +1418,7 @@ async function initializePoliceOtpWorkspace(token) {
             otpLabel.textContent = `${dataLabel} Email OTP`;
             otpInput.value = "";
             otpEntry.hidden = false;
-            statusText.textContent = `Demo OTP：${result.demo_otp}（5 分鐘內有效）`;
+            statusText.textContent = `驗證碼已寄至 ${result.recipient_email}，請於 5 分鐘內輸入。`;
         } catch (error) {
             if (error.status === 401) {
                 clearSession();
