@@ -97,6 +97,22 @@ button:disabled {
     cursor: not-allowed;
 }
 
+.button-link {
+    display: block;
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 16px;
+    border-radius: 8px;
+    background: #526478;
+    color: #fff;
+    font-weight: 600;
+    text-align: center;
+    text-decoration: none;
+}
+
+.button-link:hover { background: #3f5062; }
+.public-entry { margin: 16px 0 0; }
+
 #message {
     margin: 24px 0 0;
     color: #526478;
@@ -148,5 +164,6 @@ th { background: #edf3f8; white-space: nowrap; }
 .metric-card { padding: 20px; border: 1px solid #dbe4ee; border-radius: 12px; display: grid; gap: 8px; }
 .metric-card strong { font-size: 1.8rem; }
 .metric-card small { color: #526478; }
+.single-metric { max-width: 360px; margin-top: 24px; }
 input[readonly] { background: #edf3f8; }
 .query-placeholder { margin: 20px 0 0; padding: 24px; border: 1px dashed #9eafc2; border-radius: 8px; text-align: center; }

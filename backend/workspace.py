@@ -27,6 +27,7 @@ from .models import (
 )
 
 router = APIRouter(prefix='/workspace')
+public_router = APIRouter(prefix='/public')
 LABELS = {Role.OWNER: ('車主', '提供車輛資料'), Role.VISITOR: ('訪客', '查看交通概況'), Role.VENDOR: ('合作廠商', '分析事故或交通資料'), Role.SUPERVISOR_A: ('主管 A', '審核資料使用目的'), Role.SUPERVISOR_B: ('主管 B', '獨立審核申請'), Role.ADMIN: ('系統管理者', '維護網站與服務')}
 LABELS.update({
     Role.RESEARCHER: ('交通研究者', '研究車流、交通行為'),
@@ -47,6 +48,68 @@ def traffic_summary(db):
         average_speed_kmh=round(fmean(speeds), 1) if speeds else None,
         slow_record_count=sum(speed < 20 for speed in speeds),
     )
+
+
+@public_router.get('/traffic-range')
+def public_traffic_range(db: DbSession, response: Response):
+    response.headers['Cache-Control'] = 'no-store'
+    available_start, available_end = db.execute(
+        select(
+            func.min(EncryptedTrajectory.timestamp),
+            func.max(EncryptedTrajectory.timestamp),
+        )
+    ).one()
+    return {
+        'start': available_start,
+        'end': available_end,
+    }
+
+
+@public_router.get('/average-speed')
+def public_average_speed(
+    db: DbSession,
+    response: Response,
+    start: datetime,
+    end: datetime,
+):
+    response.headers['Cache-Control'] = 'no-store'
+    if start.tzinfo is not None or end.tzinfo is not None:
+        raise HTTPException(422, 'Use local timestamps without a timezone offset')
+    if start > end:
+        raise HTTPException(422, 'Start must not be later than end')
+
+    rows = db.execute(
+        select(
+            EncryptedTrajectory.plate_lookup,
+            EncryptedTrajectory.timestamp,
+            EncryptedTrajectory.speed_enc,
+        )
+        .where(
+            EncryptedTrajectory.timestamp >= start,
+            EncryptedTrajectory.timestamp <= end,
+        )
+        .order_by(
+            EncryptedTrajectory.plate_lookup,
+            EncryptedTrajectory.timestamp,
+            EncryptedTrajectory.id,
+        )
+    )
+    unique_samples = {}
+    for plate_lookup, timestamp, speed_enc in rows:
+        unique_samples.setdefault((plate_lookup, timestamp), speed_enc)
+
+    vehicle_speeds = {}
+    for (plate_lookup, _), speed_enc in unique_samples.items():
+        vehicle_speeds.setdefault(plate_lookup, []).append(
+            decrypt_speed(speed_enc)
+        )
+
+    # Do not release a statistic that could describe one or two vehicles.
+    if len(vehicle_speeds) < 3:
+        return {'average_speed_kmh': None}
+
+    per_vehicle_averages = [fmean(speeds) for speeds in vehicle_speeds.values()]
+    return {'average_speed_kmh': round(fmean(per_vehicle_averages), 1)}
 
 
 def daily_traffic_analysis(db):
@@ -96,7 +159,7 @@ def workspace(db: DbSession, user: CurrentUser, response: Response):
             if vehicles else '尚未綁定車輛，目前不提供個別軌跡。'
         )
     elif user.role == Role.VISITOR:
-        result['traffic'] = traffic_summary(db)
+        result['notice'] = '訪客統計已改由不需登入的公開頁面提供。'
     elif user.role in (Role.VENDOR, Role.SUPERVISOR_A, Role.SUPERVISOR_B):
         query = select(DataRequest).order_by(DataRequest.id.desc()).limit(100)
         if user.role == Role.VENDOR:

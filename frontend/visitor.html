@@ -7,37 +7,35 @@
     <link rel="stylesheet" href="style.css">
     <script src="app.js" defer></script>
 </head>
-<body data-role="visitor">
+<body data-public-page="visitor">
     <main class="dashboard">
         <h1>零信任車輛資料分享</h1>
-        <section id="profile" hidden aria-label="目前使用者">
-            <p class="account-row"><span>帳號</span><strong id="current-username"></strong></p>
-            <p class="account-row"><span>角色</span><strong id="current-role"></strong></p>
-            <button id="logout" type="button">登出</button>
-        </section>
-        <section id="workspace" hidden aria-label="訪客工作區">
-            <h2>訪客工作區</h2>
-            <p>查看交通概況</p>
-            <p class="preview-notice">介面展示：以下內容與操作尚未連接資料查詢、申請、審核或 OTP 服務。</p>
-            <ul class="access-list"><li>只提供彙總交通統計</li><li>時間區間化</li><li>不提供個別車輛位置或速度</li></ul>
-            <div class="metric-grid"><div class="metric-card"><span>車流量</span><strong>—</strong><small>尚未載入資料</small></div>
-<div class="metric-card"><span>平均速度</span><strong>—</strong><small>尚未載入資料</small></div>
-<div class="metric-card"><span>壅塞程度</span><strong>—</strong><small>尚未載入資料</small></div></div>
+        <p><a href="login.html">返回登入頁</a></p>
+        <section id="public-visitor" aria-label="公開訪客交通統計">
+            <h2>訪客</h2>
+            <p>不需登入，只提供所選時間內的整體平均速度。</p>
+            <p class="preview-notice">不提供車牌、車輛數、個別速度、位置、軌跡或資料下載。</p>
             <div class="role-grid">
 <section class="feature-card">
-<h3>交通概況</h3>
-<p>依時間區間查看車流量、平均速度及壅塞程度。</p>
-<label for="visitor-0-0">開始時間</label>
-<input id="visitor-0-0" type="datetime-local">
-<label for="visitor-0-1">結束時間</label>
-<input id="visitor-0-1" type="datetime-local">
-<div class="preview-actions"><button type="button" data-preview>查看交通概況</button></div>
-
+<h3>查詢時間</h3>
+<p id="visitor-available-range">正在載入可查詢時間…</p>
+<label for="visitor-start">開始時間</label>
+<input id="visitor-start" type="datetime-local" step="1">
+<label for="visitor-end">結束時間</label>
+<input id="visitor-end" type="datetime-local" step="1">
+<div class="preview-actions"><button id="visitor-query" type="button">查詢平均速度</button></div>
 </section>
             </div>
+            <div class="metric-grid single-metric">
+                <div class="metric-card">
+                    <span>平均速度</span>
+                    <strong id="visitor-average-speed">—</strong>
+                    <small id="visitor-average-note">選擇時間後查詢</small>
+                </div>
+            </div>
         </section>
-        <p id="message" role="status" aria-live="polite">正在驗證登入身份…</p>
-        <noscript>請啟用 JavaScript 以驗證登入身份。</noscript>
+        <p id="message" role="status" aria-live="polite">正在載入公開交通統計…</p>
+        <noscript>請啟用 JavaScript 以查詢平均速度。</noscript>
     </main>
 </body>
 </html>

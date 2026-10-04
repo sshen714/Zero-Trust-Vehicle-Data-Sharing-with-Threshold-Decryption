@@ -9,21 +9,19 @@ from typing import Annotated, List
 from fastapi import Depends, FastAPI, HTTPException, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import or_, select
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select
 
 from .auth import (
     DUMMY_PASSWORD_HASH,
     TOKEN_LIFETIME_SECONDS,
     create_access_token,
-    hash_password,
     verify_password,
 )
 from .database import engine
 from .dependencies import CurrentUser, DbSession, require_roles
 from .models import Role, User
-from .schemas import RegisterRequest, TokenResponse, UserResponse
-from .workspace import router as workspace_router
+from .schemas import TokenResponse, UserResponse
+from .workspace import public_router, router as workspace_router
 
 
 def get_cors_origins() -> List[str]:
@@ -64,46 +62,7 @@ app.add_middleware(
 )
 
 app.include_router(workspace_router)
-
-
-@app.post(
-    "/auth/register",
-    response_model=UserResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-def register(data: RegisterRequest, db: DbSession) -> User:
-    """Create a public account with the fixed visitor role."""
-    email = str(data.email)
-    existing_id = db.scalar(
-        select(User.id).where(
-            or_(User.username == data.username, User.email == email)
-        )
-    )
-    if existing_id is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Username or email already exists",
-        )
-
-    user = User(
-        username=data.username,
-        email=email,
-        hashed_password=hash_password(data.password),
-        role=Role.VISITOR,
-        is_active=True,
-    )
-    db.add(user)
-    try:
-        db.commit()
-        db.refresh(user)
-    except IntegrityError:
-        # Keep the unique database constraints as the final concurrency guard.
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Username or email already exists",
-        ) from None
-    return user
+app.include_router(public_router)
 
 
 @app.post("/auth/login", response_model=TokenResponse)

@@ -214,20 +214,20 @@ MySQL
 vehicle_data_sharing.encrypted_trajectories
 ```
 
-## 7. 八種身份與測試帳號
+## 7. 公開訪客與七種登入身份
 
-目前本機已建立八種身份的測試帳號。帳號及密碼不隨 Git 提交，其他開發者 clone 專案後不會自動取得這些帳號。建立與驗證腳本已移除，`scripts/create_table.py` 只負責建表，不建立帳號。
+訪客不需要帳號或密碼，可從登入頁的「訪客」入口查看公開平均速度。其他身份使用本機測試帳號；帳號及密碼不隨 Git 提交，其他開發者 clone 專案後不會自動取得這些帳號。建立與驗證腳本已移除，`scripts/create_table.py` 只負責建表，不建立帳號。
 
 密碼已隨機產生，儲存在專案根目錄的 `.demo-accounts.json`（僅本機使用，已被 Git 忽略）。每個帳號均使用自己的密碼；登入時填 username。
 
-八種身份的介面分別位於 `frontend/owner.html`、`visitor.html`、`vendor.html`、`supervisor_a.html`、`supervisor_b.html`、`admin.html`、`researcher.html`、`police.html`。`index.html` 只負責登入後導頁，`app.js` 處理共用登入驗證與展示按鈕，不產生角色畫面。
+公開訪客頁位於 `frontend/visitor.html`；登入身份的介面分別位於 `frontend/owner.html`、`vendor.html`、`supervisor_a.html`、`supervisor_b.html`、`admin.html`、`researcher.html`、`police.html`。`index.html` 只負責登入後導頁，`app.js` 處理公開訪客查詢與登入身份驗證。
 
-目前先製作八種身份的前端展示畫面。登入呼叫 `/auth/login` 與 `/auth/me` 驗證身份，角色頁會呼叫 `/workspace` 載入工作區基本資料；歷史軌跡、申請及審核操作尚未由前端呼叫。操作按鈕只顯示展示提示，不會查詢、上傳或儲存資料。
+登入身份呼叫 `/auth/login` 與 `/auth/me` 驗證身份，角色頁會呼叫 `/workspace` 載入工作區基本資料。公開訪客頁不建立 session，只呼叫公開的時間範圍與平均速度 API。
 
 | 身份 | 測試帳號 | 目前展示的畫面 |
 | --- | --- | --- |
 | 車主 | `demo_owner` | 輸入本人綁定車牌與選填時間，下載模糊位置或模糊速度 CSV |
-| 訪客 | `demo_visitor` | 時間區間查詢、車流量、平均速度、壅塞程度（統計值為空） |
+| 訪客 | 不需帳號 | 選擇時間後只顯示所有車輛的整體平均速度 |
 | 合作廠商 | `demo_vendor` | 資料使用申請、核准資料分析、主管 A OTP 申請與驗證入口（精準位置） |
 | 主管 A | `demo_supervisor_a` | 位置查詢、主管 B OTP 申請與驗證入口（精準速度） |
 | 主管 B | `demo_supervisor_b` | 速度查詢、主管 A OTP 申請與驗證入口（精準位置） |
@@ -235,9 +235,9 @@ vehicle_data_sharing.encrypted_trajectories
 | 交通研究者 | `demo_researcher` | 依時間查詢研究資料，不顯示車牌查詢欄位 |
 | 警方 | `demo_police` | 依案件編號、車牌與時間查詢，以及案件 OTP 申請與驗證入口 |
 
-操作方式：開啟 `http://127.0.0.1:5500/login.html`，登入不同身份的測試帳號查看畫面；切換身份時先登出。車主可下載本人綁定車輛的模糊位置或速度 CSV；其他角色的操作目前仍以介面展示為主。
+操作方式：開啟 `http://127.0.0.1:5500/login.html`；訪客直接點選「訪客」，其他身份輸入測試帳號。車主可下載本人綁定車輛的模糊位置或速度 CSV；公開訪客只能查詢整體平均速度，沒有下載功能。
 
-後端每次請求都重新查詢帳號角色及啟用狀態。公開註冊仍固定建立訪客，不能由前端指定主管或管理者角色。
+後端每次受保護請求都重新查詢帳號角色及啟用狀態。訪客不建立帳號，公開註冊 API 已移除。
 
 此版本為角色權限與雙人審核的第一階段：分析授權是帳號層級、無到期時間，只提供去除個別車輛識別的交通統計；研究者與警方查詢、其他身份的時間區間篩選與位置／速度模糊化、Email OTP、事故分析、正式的授權範圍／撤銷流程、門檻解密及網站維護操作尚未實作。資料筆數少時，彙總值仍不等同匿名化保證。
 

@@ -32,7 +32,9 @@ async function apiRequest(path, options = {}) {
                 : response.status === 403
                     ? "帳號已停權，或沒有存取權限。"
                     : response.status === 422
-                        ? "輸入格式不正確，請檢查帳號與密碼。"
+                        ? (path === "/auth/login"
+                            ? "輸入格式不正確，請檢查帳號與密碼。"
+                            : "輸入格式不正確，請檢查查詢條件。")
                         : "後端無法處理此請求，請稍後再試。"
         );
         error.status = response.status;
@@ -167,6 +169,82 @@ function initializeOwnerWorkspace(token, workspaceData) {
 }
 
 
+async function initializePublicVisitorPage() {
+    const startInput = document.getElementById("visitor-start");
+    const endInput = document.getElementById("visitor-end");
+    const rangeText = document.getElementById("visitor-available-range");
+    const queryButton = document.getElementById("visitor-query");
+    const averageValue = document.getElementById("visitor-average-speed");
+    const averageNote = document.getElementById("visitor-average-note");
+    if (!startInput || !endInput || !rangeText || !queryButton || !averageValue || !averageNote) return;
+
+    queryButton.disabled = true;
+    try {
+        const range = await apiRequest("/public/traffic-range");
+        if (typeof range.start !== "string" || typeof range.end !== "string") {
+            rangeText.textContent = "目前沒有可查詢的模擬資料。";
+            message.textContent = "公開統計已連線，但資料庫目前沒有軌跡資料。";
+            return;
+        }
+        const rangeStart = range.start.slice(0, 19);
+        const rangeEnd = range.end.slice(0, 19);
+        for (const input of [startInput, endInput]) {
+            input.min = rangeStart;
+            input.max = rangeEnd;
+        }
+        startInput.value = rangeStart;
+        endInput.value = rangeEnd;
+        rangeText.textContent = `可查詢時間：${displayDateTime(rangeStart)} ～ ${displayDateTime(rangeEnd)}`;
+        queryButton.disabled = false;
+        message.textContent = "請選擇時間並查詢整體平均速度。";
+    } catch (error) {
+        rangeText.textContent = "無法載入可查詢時間。";
+        message.textContent = error.message;
+        return;
+    }
+
+    queryButton.addEventListener("click", async () => {
+        if (!startInput.value || !endInput.value) {
+            message.textContent = "請選擇開始時間與結束時間。";
+            return;
+        }
+        if (startInput.value > endInput.value) {
+            message.textContent = "開始時間不能晚於結束時間。";
+            return;
+        }
+
+        queryButton.disabled = true;
+        averageValue.textContent = "—";
+        averageNote.textContent = "正在計算…";
+        message.textContent = "正在計算所選時間內的整體平均速度…";
+        try {
+            const params = new URLSearchParams({
+                start: startInput.value,
+                end: endInput.value,
+            });
+            const data = await apiRequest(`/public/average-speed?${params.toString()}`);
+            if (data.average_speed_kmh === null) {
+                averageValue.textContent = "—";
+                averageNote.textContent = "資料不足，無法提供統計";
+                message.textContent = "所選時間內不足三台車，為保護個別車輛不提供平均速度。";
+                return;
+            }
+            if (typeof data.average_speed_kmh !== "number") {
+                throw new Error("後端平均速度格式不正確。");
+            }
+            averageValue.textContent = `${data.average_speed_kmh.toFixed(1)} km/h`;
+            averageNote.textContent = "所選時間內所有車輛的整體平均";
+            message.textContent = "平均速度查詢完成。";
+        } catch (error) {
+            averageNote.textContent = "查詢失敗";
+            message.textContent = error.message;
+        } finally {
+            queryButton.disabled = false;
+        }
+    });
+}
+
+
 async function loadWorkspace(workspace, token, expectedRole) {
     workspace.setAttribute("aria-busy", "true");
     message.textContent = "身分驗證成功，正在載入工作區資料…";
@@ -292,7 +370,6 @@ async function initializeProfilePage(profile) {
 
 const ROLE_PAGES = {
     owner: {page:'owner.html', label:'車主'},
-    visitor: {page:'visitor.html', label:'訪客'},
     vendor: {page:'vendor.html', label:'合作廠商'},
     supervisor_a: {page:'supervisor_a.html', label:'主管 A'},
     supervisor_b: {page:'supervisor_b.html', label:'主管 B'},
@@ -305,3 +382,4 @@ const loginForm = document.getElementById('login-form');
 const profile = document.getElementById('profile');
 if (loginForm) initializeLoginPage(loginForm);
 if (profile || document.getElementById('role-router')) initializeProfilePage(profile);
+if (document.body.dataset.publicPage === 'visitor') initializePublicVisitorPage();
