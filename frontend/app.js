@@ -1333,6 +1333,49 @@ function initializeLoginPage(form) {
 }
 
 
+function initializePoliceOtpPreview() {
+    const requestActions = document.getElementById("police-otp-request-actions");
+    const requestButtons = [...document.querySelectorAll("[data-police-otp-request]")];
+    const otpEntry = document.getElementById("police-otp-entry");
+    const otpLabel = document.getElementById("police-otp-label");
+    const otpInput = document.getElementById("police-otp-code");
+    const otpButton = document.getElementById("police-otp-submit");
+    const statusText = document.getElementById("police-otp-message");
+    if (!requestActions || requestButtons.length !== 2 || !otpEntry
+        || !otpLabel || !otpInput || !otpButton || !statusText) return;
+
+    let requestedDataType = null;
+    otpInput.addEventListener("input", () => {
+        otpInput.value = otpInput.value.replace(/\D/g, "").slice(0, 6);
+        statusText.textContent = "";
+    });
+    requestButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            requestedDataType = button.dataset.policeOtpRequest;
+            const dataLabel = requestedDataType === "speed" ? "精準速度" : "精準位置";
+            requestActions.hidden = true;
+            otpLabel.textContent = `${dataLabel} Email OTP`;
+            otpInput.value = "";
+            otpEntry.hidden = false;
+            otpInput.focus();
+            statusText.textContent = `${dataLabel}申請條件已確認。目前僅提供前端預覽，尚未送出 Email OTP 申請。`;
+        });
+    });
+    otpButton.addEventListener("click", () => {
+        if (!requestedDataType) {
+            statusText.textContent = "請先選擇精準位置或精準速度申請。";
+            return;
+        }
+        if (!/^\d{6}$/.test(otpInput.value)) {
+            statusText.textContent = "請輸入完整的 6 位數 Email OTP。";
+            return;
+        }
+        const dataLabel = requestedDataType === "speed" ? "精準速度" : "精準位置";
+        statusText.textContent = `${dataLabel} OTP 格式已確認。目前僅提供前端預覽，尚未驗證或下載資料。`;
+    });
+}
+
+
 async function initializeProfilePage(profile) {
     const token = sessionStorage.getItem(TOKEN_KEY);
     if (!token) {
@@ -1374,6 +1417,7 @@ async function initializeProfilePage(profile) {
         if (user.role === "supervisor_b") initializeSupervisorBWorkspace(token, workspaceData);
         if (user.role === "admin") initializeAdminWorkspace(token, workspaceData);
         if (user.role === "researcher") initializeResearcherWorkspace(token, workspaceData);
+        if (user.role === "police") initializePoliceOtpPreview();
     } catch (error) {
         if (error.status === 401 || error.status === 403) {
             clearSession();

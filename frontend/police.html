@@ -18,7 +18,7 @@
         <section id="workspace" hidden aria-label="警方工作區">
             <h2>警方工作區</h2>
             <p>肇逃、事故案件調查</p>
-            <p class="preview-notice">介面展示：以下內容與操作尚未連接資料查詢、申請、審核或 OTP 服務。</p>
+            <p class="preview-notice">介面展示：以下內容與操作尚未連接後端資料查詢或 OTP 服務。</p>
             <ul class="access-list"><li>依車牌與時間查詢</li><li>時間精準，位置與速度預設模糊</li><li>Email OTP 驗證後解鎖授權欄位</li></ul>
             
             <div class="role-grid">
@@ -36,12 +36,18 @@
 
 </section>
 <section class="feature-card">
-<h3>授權驗證</h3>
-<p>驗證 Email OTP 後查看授權欄位。</p>
-<label for="police-1-1">Email OTP</label>
-<input id="police-1-1" type="text" placeholder="請輸入Email OTP">
-<div class="preview-actions"><button type="button" data-preview>驗證 OTP</button>
-<button type="button" data-preview>申請 Email OTP</button></div>
+<h3>OTP 申請</h3>
+<p>精準位置與精準速度分別申請 Email OTP。</p>
+<div id="police-otp-request-actions" class="preview-actions">
+<button type="button" data-police-otp-request="location">送出申請精準位置</button>
+<button type="button" data-police-otp-request="speed">送出申請精準速度</button>
+</div>
+<div id="police-otp-entry" class="otp-entry" hidden>
+<label id="police-otp-label" for="police-otp-code">Email OTP</label>
+<input id="police-otp-code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" placeholder="請輸入 6 位數 Email OTP">
+<button id="police-otp-submit" type="button">送出 OTP</button>
+</div>
+<p id="police-otp-message" role="status" aria-live="polite"></p>
 
 </section>
             </div>
