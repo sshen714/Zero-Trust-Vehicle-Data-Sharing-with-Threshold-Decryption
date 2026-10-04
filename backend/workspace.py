@@ -184,11 +184,9 @@ def workspace(db: DbSession, user: CurrentUser, response: Response):
                 result['daily_analysis'] = daily_traffic_analysis(db)
     elif user.role == Role.ADMIN:
         result['service'] = dict(
-            user_count=db.scalar(select(func.count(User.id))),
-            vehicle_record_count=db.scalar(
-                select(func.count(EncryptedTrajectory.id))
-            ),
-            request_count=db.scalar(select(func.count(DataRequest.id))),
+            member_count=db.scalar(select(func.count(User.id))),
+            vehicle_count=db.scalar(select(func.count(Vehicle.vehicle_id))),
+            role_count=db.scalar(select(func.count(func.distinct(User.role)))),
         )
         result['users'] = [dict(id=u.id, username=u.username, role=u.role, is_active=u.is_active) for u in db.scalars(select(User).order_by(User.id).limit(100))]
     else:

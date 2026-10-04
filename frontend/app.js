@@ -400,6 +400,31 @@ function initializeSupervisorBWorkspace(token, workspaceData) {
 }
 
 
+function initializeAdminWorkspace(workspaceData) {
+    const memberCount = document.getElementById("admin-member-count");
+    const vehicleCount = document.getElementById("admin-vehicle-count");
+    const roleCount = document.getElementById("admin-role-count");
+    const statusNote = document.getElementById("admin-site-status-note");
+    if (!memberCount || !vehicleCount || !roleCount || !statusNote) return;
+
+    const service = workspaceData.service;
+    if (
+        !service
+        || !Number.isInteger(service.member_count)
+        || !Number.isInteger(service.vehicle_count)
+        || !Number.isInteger(service.role_count)
+    ) {
+        statusNote.textContent = "網站統計資料格式不正確。";
+        return;
+    }
+
+    memberCount.textContent = String(service.member_count);
+    vehicleCount.textContent = String(service.vehicle_count);
+    roleCount.textContent = String(service.role_count);
+    statusNote.textContent = "統計資料已載入";
+}
+
+
 async function initializePublicVisitorPage() {
     const startInput = document.getElementById("visitor-start");
     const endInput = document.getElementById("visitor-end");
@@ -591,6 +616,7 @@ async function initializeProfilePage(profile) {
         if (user.role === "vendor") initializeVendorWorkspace(token, workspaceData);
         if (user.role === "supervisor_a") initializeSupervisorAWorkspace(token, workspaceData);
         if (user.role === "supervisor_b") initializeSupervisorBWorkspace(token, workspaceData);
+        if (user.role === "admin") initializeAdminWorkspace(workspaceData);
     } catch (error) {
         if (error.status === 401 || error.status === 403) {
             clearSession();

@@ -164,6 +164,8 @@ th { background: #edf3f8; white-space: nowrap; }
 .metric-card { padding: 20px; border: 1px solid #dbe4ee; border-radius: 12px; display: grid; gap: 8px; }
 .metric-card strong { font-size: 1.8rem; }
 .metric-card small { color: #526478; }
+.metric-details { display: grid; gap: 6px; }
+.metric-details strong { font-size: inherit; }
 .single-metric { max-width: 360px; margin-top: 24px; }
 input[readonly] { background: #edf3f8; }
 .query-placeholder { margin: 20px 0 0; padding: 24px; border: 1px dashed #9eafc2; border-radius: 8px; text-align: center; }
