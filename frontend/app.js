@@ -329,8 +329,25 @@ function initializeSupervisorBWorkspace(token, workspaceData) {
     const plateInput = document.getElementById("supervisor-b-plate");
     const startInput = document.getElementById("supervisor-b-start");
     const endInput = document.getElementById("supervisor-b-end");
+    const rangeText = document.getElementById("supervisor-b-available-range");
     const downloadButton = document.getElementById("supervisor-b-download");
-    if (!plateInput || !startInput || !endInput || !downloadButton) return;
+    if (!plateInput || !startInput || !endInput || !rangeText || !downloadButton) return;
+
+    const availableRange = workspaceData.available_time_range;
+    if (availableRange?.start && availableRange?.end) {
+        const rangeStart = availableRange.start.slice(0, 19);
+        const rangeEnd = availableRange.end.slice(0, 19);
+        for (const input of [startInput, endInput]) {
+            input.min = rangeStart;
+            input.max = rangeEnd;
+        }
+        startInput.value = rangeStart;
+        endInput.value = rangeEnd;
+        rangeText.textContent = `可查詢時間：${displayDateTime(rangeStart)} ～ ${displayDateTime(rangeEnd)}`;
+    } else {
+        rangeText.textContent = "目前沒有可查詢的模擬資料。";
+        downloadButton.disabled = true;
+    }
 
     downloadButton.addEventListener("click", async () => {
         const plate = plateInput.value.trim();

@@ -165,7 +165,7 @@ def workspace(db: DbSession, user: CurrentUser, response: Response):
         if user.role == Role.VENDOR:
             query = query.where(DataRequest.vendor_id == user.id)
         result['requests'] = [request_view(r) for r in db.scalars(query)]
-        if user.role in (Role.VENDOR, Role.SUPERVISOR_A):
+        if user.role in (Role.VENDOR, Role.SUPERVISOR_A, Role.SUPERVISOR_B):
             available_start, available_end = db.execute(
                 select(
                     func.min(EncryptedTrajectory.timestamp),
