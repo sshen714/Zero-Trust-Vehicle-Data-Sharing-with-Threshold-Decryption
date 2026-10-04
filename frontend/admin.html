@@ -18,7 +18,6 @@
         <section id="workspace" hidden aria-label="系統管理者工作區">
             <h2>系統管理者工作區</h2>
             <p>維護帳號、網站與資料查詢</p>
-            <p class="preview-notice">OTP 申請目前僅提供介面展示，尚未串接。</p>
             <ul class="access-list"><li>可依車牌、時間、位置與速度查詢</li><li>位置與速度預設模糊</li><li>A OTP 解鎖位置；B OTP 解鎖速度</li></ul>
             <div class="metric-grid"><div class="metric-card"><span>網站狀態</span>
 <div class="metric-details" id="admin-site-status">
@@ -65,9 +64,11 @@
 <h3>OTP 申請</h3>
 <p>精準位置由主管 A OTP 解鎖，精準速度由主管 B OTP 解鎖。</p>
 <p>時間範圍與車牌至少填寫一項；選擇時間時，開始與結束時間必須一起填寫。</p>
+<p>只填車牌時使用該車完整資料時間；只填時間時查詢該時段所有車輛。</p>
 <form id="admin-otp-form">
 <label for="admin-otp-plate">車牌</label>
 <input id="admin-otp-plate" name="plate" type="text" maxlength="32" autocomplete="off" placeholder="例如 V00000">
+<p id="admin-otp-available-range">正在載入可申請時間…</p>
 <label for="admin-otp-start">開始時間</label>
 <input id="admin-otp-start" name="start" type="datetime-local" step="1">
 <label for="admin-otp-end">結束時間</label>
@@ -77,6 +78,11 @@
 <button id="admin-otp-speed-submit" type="submit" name="data_type" value="speed">送出申請精準速度</button>
 </div>
 </form>
+<div id="admin-otp-entry" class="otp-entry" hidden>
+<label id="admin-otp-label" for="admin-otp-code">OTP</label>
+<input id="admin-otp-code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" placeholder="請輸入 6 位數 OTP">
+<button id="admin-otp-verify" type="button">送出 OTP</button>
+</div>
 <p id="admin-otp-message" role="status" aria-live="polite"></p>
 </section>
             </div>

@@ -280,4 +280,6 @@ vehicle_data_sharing.encrypted_trajectories
 
 系統管理者使用 `GET /workspace/admin/trajectories` 依必填時間及車牌或完整速度範圍篩選資料。後端解密後套用速度條件，再輸出已去除行程首尾的模糊位置與 10 km/h 速度區間 CSV；CSV 不包含車牌、`plate_lookup`、精準位置、精準速度或密文。
 
+系統管理者的 OTP 申請可選精準位置或精準速度，至少提供車牌或完整時間範圍。只填車牌時使用該車目前完整資料時間；只填時間時使用該時段所有車輛。Demo OTP 綁定資料類型及申請範圍，五分鐘有效、最多錯誤五次，驗證成功即下載對應精準 CSV 並刪除 OTP 紀錄。此版本仍由 API 回傳 Demo OTP，尚未寄送 Email 或串接主管核准。
+
 交通研究者使用 `GET /workspace/researcher/trajectories` 依必填時間範圍下載研究 CSV。後端先對完整資料套用 `apply_researcher_pets()`，包含行程首尾去除、假名與靜默期、位置偏移、降低頻率、`coarsen_time()` 時間粗化及速度取整，再依時間範圍輸出；不提供車牌查詢或精準欄位。

@@ -1302,6 +1302,221 @@ def verify_supervisor_b_location_otp(
         },
     )
 
+class AdminOtpRequestInput(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    plate: str | None = Field(default=None, min_length=1, max_length=32)
+    start: datetime | None = None
+    end: datetime | None = None
+
+
+class AdminOtpVerificationInput(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    otp: str = Field(pattern=r'^\d{6}$')
+    plate: str | None = Field(default=None, min_length=1, max_length=32)
+    start: datetime
+    end: datetime
+
+
+def validate_admin_otp_times(start: datetime, end: datetime) -> None:
+    if start.tzinfo is not None or end.tzinfo is not None:
+        raise HTTPException(422, 'Use local timestamps without a timezone offset')
+    if start > end:
+        raise HTTPException(422, 'Start must not be later than end')
+
+
+def admin_otp_digest(data_type, request_id, otp, plate_lookup, start, end):
+    # Bind full timestamp precision; verification must not widen the scope
+    # within the same second accepted by the older OTP helper.
+    namespace = f'admin-{data_type}-otp:{start.isoformat()}:{end.isoformat()}'
+    return otp_digest(namespace, request_id, otp, plate_lookup or '*', start, end)
+
+
+def submit_admin_otp_request(
+    data_type: Literal['location', 'speed'],
+    data: AdminOtpRequestInput,
+    db: DbSession,
+    user: Annotated[User, Depends(require_roles(Role.ADMIN))],
+    response: Response,
+):
+    if data.plate is None and data.start is None and data.end is None:
+        raise HTTPException(422, 'Provide a plate or a complete time range')
+    if (data.start is None) != (data.end is None):
+        raise HTTPException(422, 'Provide both start and end')
+    plate_lookup = make_plate_lookup(data.plate) if data.plate else None
+    if plate_lookup and db.scalar(
+        select(Vehicle.vehicle_id).where(Vehicle.plate_lookup == plate_lookup)
+    ) is None:
+        raise HTTPException(404, 'Vehicle is not available')
+    range_query = select(
+        func.min(EncryptedTrajectory.timestamp),
+        func.max(EncryptedTrajectory.timestamp),
+    )
+    if plate_lookup:
+        range_query = range_query.where(EncryptedTrajectory.plate_lookup == plate_lookup)
+    available_start, available_end = db.execute(range_query).one()
+    if available_start is None or available_end is None:
+        raise HTTPException(404, 'No trajectories available')
+    start = data.start if data.start is not None else available_start
+    end = data.end if data.end is not None else available_end
+    validate_admin_otp_times(start, end)
+    # Explicit time ranges use the same global bounds as the workspace UI.
+    global_start, global_end = db.execute(select(
+        func.min(EncryptedTrajectory.timestamp), func.max(EncryptedTrajectory.timestamp),
+    )).one()
+    if start < global_start or end > global_end:
+        raise HTTPException(422, 'Requested time is outside the available range')
+    request_row = DataRequest(
+        vendor_id=user.id,
+        purpose=f'admin-{data_type}-otp',
+        decision_a='pending' if data_type == 'location' else 'not_required',
+        decision_b='pending' if data_type == 'speed' else 'not_required',
+    )
+    db.add(request_row)
+    db.flush()
+    otp = f'{secrets.randbelow(1_000_000):06d}'
+    now = utc_now_naive()
+    delete_expired_otp_challenges(db, now)
+    expires_at = now + timedelta(minutes=5)
+    db.add(OtpChallenge(
+        request_id=request_row.id,
+        otp_hash=admin_otp_digest(data_type, request_row.id, otp, plate_lookup, start, end),
+        expires_at=expires_at,
+    ))
+    db.commit()
+    response.headers['Cache-Control'] = 'no-store'
+    response.headers['Pragma'] = 'no-cache'
+    return {
+        'request_id': request_row.id,
+        'expires_at': expires_at,
+        'demo_otp': otp,
+        'plate': data.plate,
+        'start': start,
+        'end': end,
+        'data_type': data_type,
+    }
+
+
+def verify_admin_otp(
+    data_type: Literal['location', 'speed'],
+    request_id: int,
+    data: AdminOtpVerificationInput,
+    db: DbSession,
+    user: Annotated[User, Depends(require_roles(Role.ADMIN))],
+):
+    validate_admin_otp_times(data.start, data.end)
+    request_row = db.scalar(select(DataRequest).where(
+        DataRequest.id == request_id,
+        DataRequest.vendor_id == user.id,
+        DataRequest.purpose == f'admin-{data_type}-otp',
+    ))
+    if request_row is None:
+        raise HTTPException(404, 'Request not found')
+    challenge = db.scalar(select(OtpChallenge).where(
+        OtpChallenge.request_id == request_id,
+    ).order_by(OtpChallenge.id.desc()).limit(1).with_for_update())
+    if challenge is None:
+        raise HTTPException(404, 'OTP challenge not found')
+    if challenge.consumed_at is not None:
+        db.delete(challenge)
+        db.commit()
+        raise HTTPException(409, 'OTP has already been used')
+    if utc_now_naive() >= challenge.expires_at:
+        db.delete(challenge)
+        db.commit()
+        raise HTTPException(410, 'OTP has expired')
+    if challenge.attempt_count >= challenge.max_attempts:
+        db.delete(challenge)
+        db.commit()
+        raise HTTPException(429, 'OTP attempt limit reached')
+    plate_lookup = make_plate_lookup(data.plate) if data.plate else None
+    expected = admin_otp_digest(data_type, request_id, data.otp,
+                               plate_lookup, data.start, data.end)
+    if not hmac.compare_digest(challenge.otp_hash, expected):
+        challenge.attempt_count += 1
+        exhausted = challenge.attempt_count >= challenge.max_attempts
+        if exhausted:
+            db.delete(challenge)
+        db.commit()
+        if exhausted:
+            raise HTTPException(429, 'OTP attempt limit reached')
+        raise HTTPException(422, 'OTP is incorrect')
+    query = select(EncryptedTrajectory).where(
+        EncryptedTrajectory.timestamp >= data.start,
+        EncryptedTrajectory.timestamp <= data.end,
+    )
+    if plate_lookup:
+        query = query.where(EncryptedTrajectory.plate_lookup == plate_lookup)
+    rows = db.scalars(query.order_by(EncryptedTrajectory.timestamp, EncryptedTrajectory.id))
+    unique_rows = {(row.plate_lookup, row.timestamp): row for row in rows}
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['timestamp', 'latitude', 'longitude'] if data_type == 'location'
+                    else ['timestamp', 'speed_kmh'])
+    for row in unique_rows.values():
+        timestamp = row.timestamp.isoformat(sep=' ')
+        if data_type == 'location':
+            location = decrypt_location(row.location_enc)
+            writer.writerow([timestamp, f"{location['lat']:.6f}", f"{location['lng']:.6f}"])
+        else:
+            writer.writerow([timestamp, f'{decrypt_speed(row.speed_enc):.1f}'])
+    if data_type == 'location':
+        request_row.decision_a = 'approved'
+    else:
+        request_row.decision_b = 'approved'
+    db.delete(challenge)
+    db.commit()
+    return Response(
+        content='\ufeff' + output.getvalue(),
+        media_type='text/csv; charset=utf-8',
+        headers={
+            'Cache-Control': 'no-store',
+            'Content-Disposition': (
+                f'attachment; filename="admin-authorized-{data_type}.csv"'
+            ),
+        },
+    )
+
+
+@router.post('/admin/location-requests', status_code=201)
+def submit_admin_location_request(
+    data: AdminOtpRequestInput,
+    db: DbSession,
+    user: Annotated[User, Depends(require_roles(Role.ADMIN))],
+    response: Response,
+):
+    return submit_admin_otp_request('location', data, db, user, response)
+
+
+@router.post('/admin/location-requests/{request_id}/verify-otp')
+def verify_admin_location_otp(
+    request_id: int,
+    data: AdminOtpVerificationInput,
+    db: DbSession,
+    user: Annotated[User, Depends(require_roles(Role.ADMIN))],
+):
+    return verify_admin_otp('location', request_id, data, db, user)
+
+
+@router.post('/admin/speed-requests', status_code=201)
+def submit_admin_speed_request(
+    data: AdminOtpRequestInput,
+    db: DbSession,
+    user: Annotated[User, Depends(require_roles(Role.ADMIN))],
+    response: Response,
+):
+    return submit_admin_otp_request('speed', data, db, user, response)
+
+
+@router.post('/admin/speed-requests/{request_id}/verify-otp')
+def verify_admin_speed_otp(
+    request_id: int,
+    data: AdminOtpVerificationInput,
+    db: DbSession,
+    user: Annotated[User, Depends(require_roles(Role.ADMIN))],
+):
+    return verify_admin_otp('speed', request_id, data, db, user)
+
+
 class DecisionInput(BaseModel):
     model_config = ConfigDict(extra='forbid')
     decision: Literal['approved', 'rejected']

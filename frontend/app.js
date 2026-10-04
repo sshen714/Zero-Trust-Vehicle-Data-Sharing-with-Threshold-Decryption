@@ -828,22 +828,69 @@ function initializeAdminAccountLookup(token) {
 }
 
 
-function initializeAdminOtpPreview() {
+function initializeAdminOtpWorkspace(token, workspaceData) {
     const form = document.getElementById("admin-otp-form");
-    const plateInput = document.getElementById("admin-otp-plate");
-    const startInput = document.getElementById("admin-otp-start");
-    const endInput = document.getElementById("admin-otp-end");
+    const requestVehicleInput = document.getElementById("admin-otp-plate");
+    const requestStartInput = document.getElementById("admin-otp-start");
+    const requestEndInput = document.getElementById("admin-otp-end");
+    const requestRangeText = document.getElementById("admin-otp-available-range");
     const statusText = document.getElementById("admin-otp-message");
-    if (!form || !plateInput || !startInput || !endInput || !statusText) return;
-
+    const otpEntry = document.getElementById("admin-otp-entry");
+    const otpInput = document.getElementById("admin-otp-code");
+    const otpLabel = document.getElementById("admin-otp-label");
+    const otpButton = document.getElementById("admin-otp-verify");
+    const requestButtons = [document.getElementById("admin-otp-location-submit"),
+                            document.getElementById("admin-otp-speed-submit")];
+    if (!form || !requestVehicleInput || !requestStartInput || !requestEndInput || !requestRangeText || !statusText
+        || !otpEntry || !otpInput || !otpLabel || !otpButton || requestButtons.some(button => !button)) return;
+    const availableRange = workspaceData.available_time_range;
+    const hasAvailableData = Boolean(availableRange?.start && availableRange?.end);
+    if (hasAvailableData) {
+        const rangeStart = availableRange.start.slice(0, 19);
+        const rangeEnd = availableRange.end.slice(0, 19);
+        for (const input of [requestStartInput, requestEndInput]) {
+            input.min = rangeStart;
+            input.max = rangeEnd;
+        }
+        requestStartInput.value = rangeStart;
+        requestEndInput.value = rangeEnd;
+        requestRangeText.textContent = `可申請時間：${displayDateTime(rangeStart)} ～ ${displayDateTime(rangeEnd)}`;
+    } else {
+        requestRangeText.textContent = "目前沒有可申請的模擬資料。";
+        requestButtons.forEach(button => { button.disabled = true; });
+    }
+    let requestScope = null;
+    let completed = false;
+    let busy = false;
+    function setBusy(value) {
+        busy = value;
+        for (const control of [requestVehicleInput, requestStartInput, requestEndInput, otpInput, otpButton, ...requestButtons]) {
+            control.disabled = value;
+        }
+        otpInput.disabled = value || completed;
+    }
+    function clearRequest() {
+        requestScope = null;
+        completed = false;
+        otpButton.hidden = false;
+        otpInput.disabled = false;
+        requestButtons.forEach(button => { button.hidden = false; });
+        otpEntry.hidden = true;
+        otpInput.value = "";
+    }
     form.addEventListener("input", () => {
+        clearRequest();
         statusText.textContent = "";
     });
-    form.addEventListener("submit", (event) => {
+    otpInput.addEventListener("input", () => {
+        otpInput.value = otpInput.value.replace(/\D/g, "").slice(0, 6);
+    });
+    form.addEventListener("submit", async (event) => {
         event.preventDefault();
-        const plate = plateInput.value.trim();
-        const start = startInput.value;
-        const end = endInput.value;
+        if (busy || !hasAvailableData || requestScope) return;
+        const plate = requestVehicleInput.value.trim();
+        const start = requestStartInput.value;
+        const end = requestEndInput.value;
         if (!plate && !start && !end) {
             statusText.textContent = "請至少填寫時間範圍或車牌其中一項。";
             return;
@@ -856,15 +903,91 @@ function initializeAdminOtpPreview() {
             statusText.textContent = "開始時間不能晚於結束時間。";
             return;
         }
-        const dataLabel = event.submitter?.value === "speed" ? "精準速度" : "精準位置";
-        statusText.textContent = `${dataLabel}申請條件已確認。目前僅提供前端預覽，尚未送出 OTP 申請。`;
+        const dataType = event.submitter?.value === "speed" ? "speed" : "location";
+        const dataLabel = dataType === "speed" ? "精準速度" : "精準位置";
+        clearRequest();
+        setBusy(true);
+        statusText.textContent = `正在建立${dataLabel}申請…`;
+        try {
+            const result = await authenticatedRequest(`/workspace/admin/${dataType}-requests`, token, {
+                method: "POST", headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({plate: plate || null, start: start || null, end: end || null}),
+            });
+            requestScope = result;
+            requestButtons.forEach(button => { button.hidden = true; });
+            otpButton.hidden = false;
+            otpLabel.textContent = dataType === "location" ? "主管 A OTP（精準位置）" : "主管 B OTP（精準速度）";
+            otpEntry.hidden = false;
+            statusText.textContent = `Demo OTP：${result.demo_otp}（5 分鐘內有效）。範圍：${result.plate || "所有車輛"}，${displayDateTime(result.start)} ～ ${displayDateTime(result.end)}`;
+        } catch (error) {
+            if (error.status === 401) {
+                clearSession();
+                location.replace("login.html?reason=session");
+                return;
+            }
+            statusText.textContent = error.message;
+        } finally {
+            setBusy(false);
+            if (requestScope) otpInput.focus();
+        }
+    });
+    otpButton.addEventListener("click", async () => {
+        if (busy) return;
+        if (!Number.isInteger(requestScope?.request_id)) {
+            statusText.textContent = "請先送出申請。";
+            return;
+        }
+        if (!/^\d{6}$/.test(otpInput.value)) {
+            statusText.textContent = "請輸入完整的 6 位數 OTP。";
+            return;
+        }
+        const request = requestScope;
+        const dataLabel = request.data_type === "speed" ? "精準速度" : "精準位置";
+        setBusy(true);
+        statusText.textContent = "正在驗證 OTP…";
+        try {
+            const blob = await authenticatedPostDownload(
+                `/workspace/admin/${request.data_type}-requests/${request.request_id}/verify-otp`, token,
+                {otp: otpInput.value, plate: request.plate, start: request.start, end: request.end},
+            );
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `admin-authorized-${request.data_type}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+            requestScope = null;
+            completed = true;
+            otpInput.disabled = true;
+            otpButton.hidden = true;
+            statusText.textContent = `OTP 驗證成功，${dataLabel} CSV 已下載。`;
+        } catch (error) {
+            if (error.status === 401) {
+                clearSession();
+                location.replace("login.html?reason=session");
+                return;
+            }
+            const messages = {
+                404: "找不到申請或 OTP 已失效，請重新送出申請。",
+                409: "OTP 已使用，請重新送出申請。",
+                410: "OTP 已過期，請重新送出申請。",
+                422: "OTP 不正確，請重新輸入。",
+                429: "OTP 錯誤次數已達上限，請重新送出申請。",
+            };
+            if ([404, 409, 410, 429].includes(error.status)) clearRequest();
+            statusText.textContent = messages[error.status] || error.message;
+        } finally {
+            setBusy(false);
+        }
     });
 }
 
 
 function initializeAdminWorkspace(token, workspaceData) {
     initializeAdminAccountLookup(token);
-    initializeAdminOtpPreview();
+    initializeAdminOtpWorkspace(token, workspaceData);
     const memberCount = document.getElementById("admin-member-count");
     const vehicleCount = document.getElementById("admin-vehicle-count");
     const roleCount = document.getElementById("admin-role-count");

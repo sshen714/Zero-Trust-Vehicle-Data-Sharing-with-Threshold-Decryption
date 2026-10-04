@@ -67,6 +67,10 @@ police
 | `POST` | `/workspace/supervisor-a/speed-requests/{request_id}/verify-otp` | `supervisor_a` | 驗證本人申請的單次 OTP 並下載精準速度 CSV |
 | `POST` | `/workspace/supervisor-b/location-requests` | `supervisor_b` | 建立精準位置申請並在 Demo 模式產生 OTP |
 | `POST` | `/workspace/supervisor-b/location-requests/{request_id}/verify-otp` | `supervisor_b` | 驗證本人申請的單次 OTP 並下載精準位置 CSV |
+| `POST` | `/workspace/admin/location-requests` | `admin` | 依車牌或時間建立精準位置 Demo OTP 申請 |
+| `POST` | `/workspace/admin/location-requests/{request_id}/verify-otp` | `admin` | 驗證本人申請的 OTP 並下載精準位置 CSV |
+| `POST` | `/workspace/admin/speed-requests` | `admin` | 依車牌或時間建立精準速度 Demo OTP 申請 |
+| `POST` | `/workspace/admin/speed-requests/{request_id}/verify-otp` | `admin` | 驗證本人申請的 OTP 並下載精準速度 CSV |
 | `POST` | `/workspace/requests/{request_id}/decision` | `supervisor_a`、`supervisor_b` | 記錄該主管的核准或拒絕決定 |
 
 `GET /workspace` 目前依角色回傳以下資料：
@@ -91,6 +95,8 @@ police
 合作廠商位置 OTP 目前是本機 Demo 流程：送出申請時建立 `data_requests` 與只含雜湊的 `otp_challenges`，OTP 五分鐘有效且最多錯誤五次。OTP 雜湊同時綁定車牌查詢碼與起訖時間，變更任一條件都無法通過驗證；成功後直接下載該範圍的精準位置 CSV，並立即刪除 OTP 紀錄。驗證時發現過期、達到錯誤上限或建立新 OTP 時發現其他過期紀錄，也會刪除已失效的 OTP；目前不保留 OTP 稽核 Log。為方便尚未設定 SMTP 的本機驗證，原始 OTP 會暫時在建立申請的 API 回應中回傳；正式寄信前必須移除 `demo_otp`。
 
 ## 資料模型
+
+管理者 OTP 申請至少提供車牌或完整時間範圍。只提供車牌時，後端以該車目前的最早及最晚軌跡時間固定範圍；只提供時間時，範圍包含該時段所有車輛。建立回應提供固定後的 `plate`、`start`、`end`，驗證時需使用相同範圍。OTP 雜湊綁定申請 ID、資料類型、車牌條件與完整時間精度，五分鐘有效，最多錯誤五次，成功即刪除 OTP。位置 CSV 僅含時間、經緯度，速度 CSV 僅含時間與精準速度，不含車牌或密文。此流程與其他 OTP 同為本機 Demo，API 回傳 `demo_otp`，尚未寄信或串接主管核准。
 
 所有登入身份共用 `users`，角色特有的資料保存在個別業務表，不為每個角色建立重複的帳號表。
 
