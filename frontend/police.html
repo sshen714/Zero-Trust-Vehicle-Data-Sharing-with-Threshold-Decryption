@@ -38,10 +38,20 @@
 <section class="feature-card">
 <h3>OTP 申請</h3>
 <p>精準位置與精準速度分別申請 Email OTP。</p>
+<p>車牌必填，並選擇完整的開始與結束時間。</p>
+<form id="police-otp-form">
+<label for="police-otp-plate">車牌</label>
+<input id="police-otp-plate" name="plate" type="text" maxlength="32" autocomplete="off" placeholder="例如 V00000">
+<p id="police-otp-available-range">正在載入可申請時間…</p>
+<label for="police-otp-start">開始時間</label>
+<input id="police-otp-start" name="start" type="datetime-local" step="1">
+<label for="police-otp-end">結束時間</label>
+<input id="police-otp-end" name="end" type="datetime-local" step="1">
 <div id="police-otp-request-actions" class="preview-actions">
-<button type="button" data-police-otp-request="location">送出申請精準位置</button>
-<button type="button" data-police-otp-request="speed">送出申請精準速度</button>
+<button type="submit" name="data_type" value="location">送出申請精準位置</button>
+<button type="submit" name="data_type" value="speed">送出申請精準速度</button>
 </div>
+</form>
 <div id="police-otp-entry" class="otp-entry" hidden>
 <label id="police-otp-label" for="police-otp-code">Email OTP</label>
 <input id="police-otp-code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" placeholder="請輸入 6 位數 Email OTP">

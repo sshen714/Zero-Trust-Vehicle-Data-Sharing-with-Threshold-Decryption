@@ -1333,33 +1333,80 @@ function initializeLoginPage(form) {
 }
 
 
-function initializePoliceOtpPreview() {
+async function initializePoliceOtpPreview() {
+    const form = document.getElementById("police-otp-form");
+    const plateInput = document.getElementById("police-otp-plate");
+    const startInput = document.getElementById("police-otp-start");
+    const endInput = document.getElementById("police-otp-end");
+    const rangeText = document.getElementById("police-otp-available-range");
     const requestActions = document.getElementById("police-otp-request-actions");
-    const requestButtons = [...document.querySelectorAll("[data-police-otp-request]")];
+    const requestButtons = [...requestActions?.querySelectorAll("button") || []];
     const otpEntry = document.getElementById("police-otp-entry");
     const otpLabel = document.getElementById("police-otp-label");
     const otpInput = document.getElementById("police-otp-code");
     const otpButton = document.getElementById("police-otp-submit");
     const statusText = document.getElementById("police-otp-message");
-    if (!requestActions || requestButtons.length !== 2 || !otpEntry
+    if (!form || !plateInput || !startInput || !endInput || !rangeText
+        || !requestActions || requestButtons.length !== 2 || !otpEntry
         || !otpLabel || !otpInput || !otpButton || !statusText) return;
 
     let requestedDataType = null;
+    try {
+        const availableRange = await apiRequest("/public/traffic-range");
+        if (availableRange?.start && availableRange?.end) {
+            const rangeStart = availableRange.start.slice(0, 19);
+            const rangeEnd = availableRange.end.slice(0, 19);
+            for (const input of [startInput, endInput]) {
+                input.min = rangeStart;
+                input.max = rangeEnd;
+            }
+            startInput.value = rangeStart;
+            endInput.value = rangeEnd;
+            rangeText.textContent = `可申請時間：${displayDateTime(rangeStart)} ～ ${displayDateTime(rangeEnd)}`;
+        } else {
+            rangeText.textContent = "目前沒有可申請的模擬資料。";
+            requestButtons.forEach(button => { button.disabled = true; });
+        }
+    } catch (error) {
+        rangeText.textContent = "無法載入可申請時間。";
+        requestButtons.forEach(button => { button.disabled = true; });
+        statusText.textContent = error.message;
+    }
+    form.addEventListener("input", () => {
+        requestedDataType = null;
+        requestActions.hidden = false;
+        otpEntry.hidden = true;
+        otpInput.value = "";
+        statusText.textContent = "";
+    });
     otpInput.addEventListener("input", () => {
         otpInput.value = otpInput.value.replace(/\D/g, "").slice(0, 6);
         statusText.textContent = "";
     });
-    requestButtons.forEach((button) => {
-        button.addEventListener("click", () => {
-            requestedDataType = button.dataset.policeOtpRequest;
-            const dataLabel = requestedDataType === "speed" ? "精準速度" : "精準位置";
-            requestActions.hidden = true;
-            otpLabel.textContent = `${dataLabel} Email OTP`;
-            otpInput.value = "";
-            otpEntry.hidden = false;
-            otpInput.focus();
-            statusText.textContent = `${dataLabel}申請條件已確認。目前僅提供前端預覽，尚未送出 Email OTP 申請。`;
-        });
+    form.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const plate = plateInput.value.trim();
+        if (!plate) {
+            statusText.textContent = "請先輸入車牌。";
+            plateInput.focus();
+            return;
+        }
+        if (!startInput.value || !endInput.value) {
+            statusText.textContent = "請選擇開始時間與結束時間。";
+            return;
+        }
+        if (startInput.value > endInput.value) {
+            statusText.textContent = "開始時間不能晚於結束時間。";
+            return;
+        }
+        requestedDataType = event.submitter?.value === "speed" ? "speed" : "location";
+        const dataLabel = requestedDataType === "speed" ? "精準速度" : "精準位置";
+        requestActions.hidden = true;
+        otpLabel.textContent = `${dataLabel} Email OTP`;
+        otpInput.value = "";
+        otpEntry.hidden = false;
+        otpInput.focus();
+        statusText.textContent = `${dataLabel}申請條件已確認：${plate}，${displayDateTime(startInput.value)} ～ ${displayDateTime(endInput.value)}。目前僅提供前端預覽，尚未送出 Email OTP 申請。`;
     });
     otpButton.addEventListener("click", () => {
         if (!requestedDataType) {
