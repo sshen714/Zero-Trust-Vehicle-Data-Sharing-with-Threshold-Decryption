@@ -65,7 +65,7 @@ police
 - 管理者：帳號、軌跡與申請數量，以及最近 100 個帳號的基本狀態。
 - 交通研究者、警方：目前回傳角色標籤、主要任務與狀態說明。
 
-車主軌跡查詢接收 `plate`、`data_type`，以及選填的 `start`、`end`。後端由輸入車牌計算 `plate_lookup`，確認 `vehicle_ownerships` 中的所有權，再篩選 `encrypted_trajectories`。`data_type=location` 只解密位置並輸出 0.01 度區間；`data_type=speed` 只解密速度並輸出 10 km/h 區間。CSV 保留精確時間，但不包含精確位置、精確速度、車牌密文或其他密文欄位。
+車主軌跡查詢接收 `plate`、`data_type`，以及選填的 `start`、`end`。後端由輸入車牌計算 `plate_lookup`，確認 `vehicle_ownerships` 中的所有權，再篩選 `encrypted_trajectories`。`data_type=location` 會在記憶體副本中依時間間隔切分行程，每趟首尾至少移除 200～500 公尺及 1 分鐘；每趟行程的緯度與經度各使用一個由伺服器密鑰穩定產生、介於 `±0.0005°` 的固定偏移。相同資料重複下載會得到相同結果，避免利用多次亂數輸出取平均；同一趟行程採固定偏移，以保留軌跡的相對移動。位置資料先對完整行程套用 PETs，再依 `start`、`end` 篩選，避免以時間切割查詢繞過起訖點遮蔽。`data_type=speed` 只解密速度並輸出 10 km/h 區間。CSV 保留精確時間，但不包含原始位置、上下限、精確速度、車牌密文或其他密文欄位；處理結果不會回寫資料庫。
 
 資料申請分別保存主管 A 與主管 B 的決定。任一主管拒絕時狀態為 `rejected`；兩者都核准時為 `approved`；其他情況為 `pending`。同一主管不能重複修改已記錄的決定。
 

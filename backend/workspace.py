@@ -1,15 +1,21 @@
 """Role-specific data and independent approval endpoints."""
 import csv
+import hashlib
+import hmac
 from datetime import datetime
 from decimal import Decimal, ROUND_FLOOR
 from io import StringIO
 from statistics import fmean
 from typing import Annotated, Literal
+import numpy as np
+import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import select, func
 from scripts.decryption import decrypt_location, decrypt_speed
 from scripts.encryption import make_plate_lookup
+from scripts.pets import apply_owner_pets
+from .database import required_setting
 from .dependencies import CurrentUser, DbSession, require_roles
 from .models import (
     DataRequest,
@@ -123,6 +129,15 @@ def blurred_range(value, step):
     return f"{lower:f} 至 {lower + step:f}（不含上限）"
 
 
+def owner_pet_rng(plate_lookup):
+    seed_bytes = hmac.new(
+        required_setting('LOCATION_KEY').encode('utf-8'),
+        f'owner-location-pets|{plate_lookup}'.encode('ascii'),
+        hashlib.sha256,
+    ).digest()
+    return np.random.default_rng(int.from_bytes(seed_bytes[:8], 'big'))
+
+
 @router.get('/trajectories')
 def owner_trajectories(
     db: DbSession,
@@ -153,26 +168,56 @@ def owner_trajectories(
         raise HTTPException(403, 'Vehicle is not bound to this account')
 
     conditions = [EncryptedTrajectory.plate_lookup == plate_lookup]
-    if start is not None:
+    if data_type == 'speed' and start is not None:
         conditions.append(EncryptedTrajectory.timestamp >= start)
-    if end is not None:
+    if data_type == 'speed' and end is not None:
         conditions.append(EncryptedTrajectory.timestamp <= end)
 
-    rows = db.scalars(select(EncryptedTrajectory).where(*conditions).order_by(
+    rows = list(db.scalars(select(EncryptedTrajectory).where(*conditions).order_by(
         EncryptedTrajectory.timestamp,
         EncryptedTrajectory.id,
-    ))
+    )))
 
     output = StringIO()
     writer = csv.writer(output)
     if data_type == 'location':
-        writer.writerow(['timestamp', 'latitude_range', 'longitude_range'])
+        location_rows = []
         for row in rows:
             location = decrypt_location(row.location_enc)
+            location_rows.append({
+                'vehicle_id': plate_lookup,
+                'timestamp': row.timestamp,
+                'lat': location['lat'],
+                'lng': location['lng'],
+                'speed_kmh': 0,
+            })
+        rng = owner_pet_rng(plate_lookup)
+        protected = apply_owner_pets(
+            pd.DataFrame(location_rows),
+            rng=rng,
+        ) if location_rows else pd.DataFrame()
+        if not protected.empty:
+            trip_groups = (
+                protected['timestamp'].diff().dt.total_seconds().gt(300).cumsum()
+            )
+            protected['approximate_latitude'] = protected['lat']
+            protected['approximate_longitude'] = protected['lng']
+            for _, indexes in protected.groupby(trip_groups, sort=False).groups.items():
+                latitude_offset = rng.uniform(-0.0005, 0.0005)
+                longitude_offset = rng.uniform(-0.0005, 0.0005)
+                protected.loc[indexes, 'approximate_latitude'] += latitude_offset
+                protected.loc[indexes, 'approximate_longitude'] += longitude_offset
+        if start is not None and not protected.empty:
+            protected = protected[protected['timestamp'] >= start]
+        if end is not None and not protected.empty:
+            protected = protected[protected['timestamp'] <= end]
+
+        writer.writerow(['timestamp', 'approximate_latitude', 'approximate_longitude'])
+        for row in protected.itertuples(index=False):
             writer.writerow([
                 row.timestamp.isoformat(sep=' '),
-                blurred_range(location['lat'], '0.01'),
-                blurred_range(location['lng'], '0.01'),
+                f'{row.approximate_latitude:.6f}',
+                f'{row.approximate_longitude:.6f}',
             ])
     else:
         writer.writerow(['timestamp', 'speed_range_kmh'])
