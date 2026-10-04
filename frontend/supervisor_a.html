@@ -24,6 +24,20 @@
             <div class="role-grid">
 
 <section class="feature-card">
+<h3>精準速度使用申請</h3>
+<p>說明使用目的及所需的車輛、時間範圍，留待後續主管 B OTP 流程使用。</p>
+<label for="supervisor_a-0-0">使用目的</label>
+<input id="supervisor_a-0-0" type="text" placeholder="請輸入使用目的">
+<label for="supervisor_a-0-1">車輛</label>
+<input id="supervisor_a-0-1" type="text" placeholder="請輸入車輛">
+<label for="supervisor_a-0-2">開始時間</label>
+<input id="supervisor_a-0-2" type="datetime-local">
+<label for="supervisor_a-0-3">結束時間</label>
+<input id="supervisor_a-0-3" type="datetime-local">
+<div class="preview-actions"><button type="button" data-preview>送出申請</button></div>
+</section>
+
+<section class="feature-card">
 <h3>位置資料查詢</h3>
 <p>依車牌及時間查看位置資料。</p>
 <label for="supervisor_a-1-0">車牌</label>
@@ -32,11 +46,7 @@
 <input id="supervisor_a-1-1" type="datetime-local">
 <label for="supervisor_a-1-2">結束時間</label>
 <input id="supervisor_a-1-2" type="datetime-local">
-<label for="supervisor_a-otp">主管 B OTP（解鎖精準速度）</label>
-<input id="supervisor_a-otp" type="text" autocomplete="one-time-code" placeholder="請輸入主管 B OTP">
-<div class="preview-actions"><button type="button" data-preview>查詢位置</button>
-<button type="button" data-preview>申請主管 B OTP</button>
-<button type="button" data-preview>驗證 OTP 並解鎖精準速度</button></div>
+<div class="preview-actions"><button type="button" data-preview>查詢位置</button></div>
 
 </section>
             </div>
