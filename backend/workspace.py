@@ -581,8 +581,8 @@ def admin_trajectories(
     has_speed_range = min_speed is not None and max_speed is not None
     if (min_speed is None) != (max_speed is None):
         raise HTTPException(422, 'Both minimum and maximum speed are required')
-    if not plate and not has_speed_range:
-        raise HTTPException(422, 'Plate or speed range is required')
+    if not plate:
+        raise HTTPException(422, 'Plate is required')
     if has_speed_range and min_speed > max_speed:
         raise HTTPException(422, 'Minimum speed must not exceed maximum speed')
 
@@ -651,6 +651,9 @@ def admin_trajectories(
                 & (protected['exact_speed_kmh'] <= max_speed)
             ]
         protected = protected.sort_values('timestamp')
+
+    if protected.empty:
+        raise HTTPException(404, 'No trajectories available')
 
     output = StringIO()
     writer = csv.writer(output)
@@ -1304,7 +1307,7 @@ def verify_supervisor_b_location_otp(
 
 class AdminOtpRequestInput(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
-    plate: str | None = Field(default=None, min_length=1, max_length=32)
+    plate: str = Field(min_length=1, max_length=32)
     start: datetime | None = None
     end: datetime | None = None
 
@@ -1312,7 +1315,7 @@ class AdminOtpRequestInput(BaseModel):
 class AdminOtpVerificationInput(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
     otp: str = Field(pattern=r'^\d{6}$')
-    plate: str | None = Field(default=None, min_length=1, max_length=32)
+    plate: str = Field(min_length=1, max_length=32)
     start: datetime
     end: datetime
 
@@ -1338,12 +1341,10 @@ def submit_admin_otp_request(
     user: Annotated[User, Depends(require_roles(Role.ADMIN))],
     response: Response,
 ):
-    if data.plate is None and data.start is None and data.end is None:
-        raise HTTPException(422, 'Provide a plate or a complete time range')
     if (data.start is None) != (data.end is None):
         raise HTTPException(422, 'Provide both start and end')
-    plate_lookup = make_plate_lookup(data.plate) if data.plate else None
-    if plate_lookup and db.scalar(
+    plate_lookup = make_plate_lookup(data.plate)
+    if db.scalar(
         select(Vehicle.vehicle_id).where(Vehicle.plate_lookup == plate_lookup)
     ) is None:
         raise HTTPException(404, 'Vehicle is not available')
@@ -1351,8 +1352,7 @@ def submit_admin_otp_request(
         func.min(EncryptedTrajectory.timestamp),
         func.max(EncryptedTrajectory.timestamp),
     )
-    if plate_lookup:
-        range_query = range_query.where(EncryptedTrajectory.plate_lookup == plate_lookup)
+    range_query = range_query.where(EncryptedTrajectory.plate_lookup == plate_lookup)
     available_start, available_end = db.execute(range_query).one()
     if available_start is None or available_end is None:
         raise HTTPException(404, 'No trajectories available')
@@ -1365,6 +1365,12 @@ def submit_admin_otp_request(
     )).one()
     if start < global_start or end > global_end:
         raise HTTPException(422, 'Requested time is outside the available range')
+    if db.scalar(select(EncryptedTrajectory.id).where(
+        EncryptedTrajectory.plate_lookup == plate_lookup,
+        EncryptedTrajectory.timestamp >= start,
+        EncryptedTrajectory.timestamp <= end,
+    ).limit(1)) is None:
+        raise HTTPException(404, 'No trajectories available')
     request_row = DataRequest(
         vendor_id=user.id,
         purpose=f'admin-{data_type}-otp',
@@ -1428,7 +1434,7 @@ def verify_admin_otp(
         db.delete(challenge)
         db.commit()
         raise HTTPException(429, 'OTP attempt limit reached')
-    plate_lookup = make_plate_lookup(data.plate) if data.plate else None
+    plate_lookup = make_plate_lookup(data.plate)
     expected = admin_otp_digest(data_type, request_id, data.otp,
                                plate_lookup, data.start, data.end)
     if not hmac.compare_digest(challenge.otp_hash, expected):
@@ -1444,10 +1450,11 @@ def verify_admin_otp(
         EncryptedTrajectory.timestamp >= data.start,
         EncryptedTrajectory.timestamp <= data.end,
     )
-    if plate_lookup:
-        query = query.where(EncryptedTrajectory.plate_lookup == plate_lookup)
+    query = query.where(EncryptedTrajectory.plate_lookup == plate_lookup)
     rows = db.scalars(query.order_by(EncryptedTrajectory.timestamp, EncryptedTrajectory.id))
     unique_rows = {(row.plate_lookup, row.timestamp): row for row in rows}
+    if not unique_rows:
+        raise HTTPException(404, 'No trajectories available')
     output = StringIO()
     writer = csv.writer(output)
     writer.writerow(['timestamp', 'latitude', 'longitude'] if data_type == 'location'

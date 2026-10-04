@@ -45,7 +45,7 @@
 <section class="feature-card">
 <h3>資料查詢</h3>
 <p>依條件查看資料。</p>
-<p>車牌與速度範圍至少填寫一項；速度下限與上限必須一起填寫。</p>
+<p>車牌必填；可另加速度範圍，速度下限與上限必須一起填寫。查無資料時不提供下載。</p>
 <div class="input-pair">
 <div><label for="admin-min-speed">速度下限（km/h）</label><input id="admin-min-speed" type="number" min="0" max="300" step="0.1" placeholder="例如 20"></div>
 <div><label for="admin-max-speed">速度上限（km/h）</label><input id="admin-max-speed" type="number" min="0" max="300" step="0.1" placeholder="例如 60"></div>
@@ -63,8 +63,8 @@
 <section class="feature-card">
 <h3>OTP 申請</h3>
 <p>精準位置由主管 A OTP 解鎖，精準速度由主管 B OTP 解鎖。</p>
-<p>時間範圍與車牌至少填寫一項；選擇時間時，開始與結束時間必須一起填寫。</p>
-<p>只填車牌時使用該車完整資料時間；只填時間時查詢該時段所有車輛。</p>
+<p>車牌必填；選擇時間時，開始與結束時間必須一起填寫。</p>
+<p>清空兩個時間時使用該車完整資料時間。查無資料時不提供申請或下載。</p>
 <form id="admin-otp-form">
 <label for="admin-otp-plate">車牌</label>
 <input id="admin-otp-plate" name="plate" type="text" maxlength="32" autocomplete="off" placeholder="例如 V00000">

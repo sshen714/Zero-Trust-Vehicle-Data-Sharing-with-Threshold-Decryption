@@ -33,6 +33,8 @@ async function apiRequest(path, options = {}) {
                     ? "帳號已停權，或沒有存取權限。"
                     : response.status === 404 && data?.detail === "Vehicle is not available"
                         ? "找不到此車輛，請確認車輛代碼是否完整且正確。"
+                    : response.status === 404 && data?.detail === "No trajectories available"
+                        ? "此車牌在所選條件下沒有可下載的資料，請調整查詢條件。"
                     : response.status === 422
                         ? (path === "/auth/login"
                             ? "輸入格式不正確，請檢查帳號與密碼。"
@@ -73,6 +75,10 @@ async function authenticatedDownload(path, token) {
                 ? "登入憑證無效或已過期，請重新登入。"
                 : response.status === 403
                     ? "此車牌未綁定至目前帳號。"
+                    : data?.detail === "Vehicle is not available"
+                        ? "找不到此車輛，請確認車輛代碼是否完整且正確。"
+                    : data?.detail === "No trajectories available"
+                        ? "此車牌在所選條件下沒有可下載的資料，請調整查詢條件。"
                     : (typeof data?.detail === "string"
                         ? data.detail
                         : "後端無法產生 CSV，請稍後再試。")
@@ -104,7 +110,9 @@ async function authenticatedPostDownload(path, token, body) {
     if (!response.ok) {
         const data = await response.json().catch(() => null);
         const error = new Error(
-            typeof data?.detail === "string"
+            data?.detail === "No trajectories available"
+                ? "此車牌在所選條件下沒有可下載的資料，請調整查詢條件。"
+                : typeof data?.detail === "string"
                 ? data.detail
                 : "後端無法驗證 OTP 或產生 CSV。"
         );
@@ -891,8 +899,9 @@ function initializeAdminOtpWorkspace(token, workspaceData) {
         const plate = requestVehicleInput.value.trim();
         const start = requestStartInput.value;
         const end = requestEndInput.value;
-        if (!plate && !start && !end) {
-            statusText.textContent = "請至少填寫時間範圍或車牌其中一項。";
+        if (!plate) {
+            statusText.textContent = "請先輸入車牌，才能申請 OTP 與下載資料。";
+            requestVehicleInput.focus();
             return;
         }
         if ((start && !end) || (!start && end)) {
@@ -911,7 +920,7 @@ function initializeAdminOtpWorkspace(token, workspaceData) {
         try {
             const result = await authenticatedRequest(`/workspace/admin/${dataType}-requests`, token, {
                 method: "POST", headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({plate: plate || null, start: start || null, end: end || null}),
+                body: JSON.stringify({plate, start: start || null, end: end || null}),
             });
             requestScope = result;
             requestButtons.forEach(button => { button.hidden = true; });
@@ -970,7 +979,6 @@ function initializeAdminOtpWorkspace(token, workspaceData) {
                 return;
             }
             const messages = {
-                404: "找不到申請或 OTP 已失效，請重新送出申請。",
                 409: "OTP 已使用，請重新送出申請。",
                 410: "OTP 已過期，請重新送出申請。",
                 422: "OTP 不正確，請重新輸入。",
@@ -1044,8 +1052,9 @@ function initializeAdminWorkspace(token, workspaceData) {
         const maxSpeed = maxSpeedInput.value;
         const hasMinSpeed = minSpeed !== "";
         const hasMaxSpeed = maxSpeed !== "";
-        if (!plate && !hasMinSpeed && !hasMaxSpeed) {
-            message.textContent = "請輸入車牌，或填寫速度下限與上限。";
+        if (!plate) {
+            message.textContent = "請先輸入車牌，才能下載資料。";
+            plateInput.focus();
             return;
         }
         if (hasMinSpeed !== hasMaxSpeed) {
