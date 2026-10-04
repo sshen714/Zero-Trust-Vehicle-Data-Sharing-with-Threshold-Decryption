@@ -250,6 +250,81 @@ function initializeVendorWorkspace(token, workspaceData) {
 }
 
 
+function initializeSupervisorAWorkspace(token, workspaceData) {
+    const plateInput = document.getElementById("supervisor-a-plate");
+    const startInput = document.getElementById("supervisor-a-start");
+    const endInput = document.getElementById("supervisor-a-end");
+    const rangeText = document.getElementById("supervisor-a-available-range");
+    const downloadButton = document.getElementById("supervisor-a-download");
+    if (!plateInput || !startInput || !endInput || !rangeText || !downloadButton) return;
+
+    const availableRange = workspaceData.available_time_range;
+    if (availableRange?.start && availableRange?.end) {
+        const rangeStart = availableRange.start.slice(0, 19);
+        const rangeEnd = availableRange.end.slice(0, 19);
+        for (const input of [startInput, endInput]) {
+            input.min = rangeStart;
+            input.max = rangeEnd;
+        }
+        startInput.value = rangeStart;
+        endInput.value = rangeEnd;
+        rangeText.textContent = `可查詢時間：${displayDateTime(rangeStart)} ～ ${displayDateTime(rangeEnd)}`;
+    } else {
+        rangeText.textContent = "目前沒有可查詢的模擬資料。";
+        downloadButton.disabled = true;
+    }
+
+    downloadButton.addEventListener("click", async () => {
+        const plate = plateInput.value.trim();
+        if (!plate) {
+            message.textContent = "請先輸入車牌。";
+            plateInput.focus();
+            return;
+        }
+        if (!startInput.value || !endInput.value) {
+            message.textContent = "請選擇開始時間與結束時間。";
+            return;
+        }
+        if (startInput.value > endInput.value) {
+            message.textContent = "開始時間不能晚於結束時間。";
+            return;
+        }
+
+        const params = new URLSearchParams({
+            plate,
+            start: startInput.value,
+            end: endInput.value,
+        });
+        downloadButton.disabled = true;
+        message.textContent = "正在解密並產生精準位置 CSV…";
+        try {
+            const blob = await authenticatedDownload(
+                `/workspace/supervisor-a/locations?${params.toString()}`,
+                token,
+            );
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "supervisor-a-locations.csv";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+            message.textContent = "精準位置 CSV 已下載。";
+        } catch (error) {
+            if (error.status === 401) {
+                clearSession();
+                location.replace("login.html?reason=session");
+                return;
+            }
+            message.textContent = error.message;
+        } finally {
+            downloadButton.disabled = false;
+        }
+    });
+}
+
+
 async function initializePublicVisitorPage() {
     const startInput = document.getElementById("visitor-start");
     const endInput = document.getElementById("visitor-end");
@@ -439,6 +514,7 @@ async function initializeProfilePage(profile) {
         const workspaceData = await loadWorkspace(workspace, token, user.role);
         if (user.role === "owner") initializeOwnerWorkspace(token, workspaceData);
         if (user.role === "vendor") initializeVendorWorkspace(token, workspaceData);
+        if (user.role === "supervisor_a") initializeSupervisorAWorkspace(token, workspaceData);
     } catch (error) {
         if (error.status === 401 || error.status === 403) {
             clearSession();

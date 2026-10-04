@@ -165,7 +165,7 @@ def workspace(db: DbSession, user: CurrentUser, response: Response):
         if user.role == Role.VENDOR:
             query = query.where(DataRequest.vendor_id == user.id)
         result['requests'] = [request_view(r) for r in db.scalars(query)]
-        if user.role == Role.VENDOR:
+        if user.role in (Role.VENDOR, Role.SUPERVISOR_A):
             available_start, available_end = db.execute(
                 select(
                     func.min(EncryptedTrajectory.timestamp),
@@ -177,6 +177,7 @@ def workspace(db: DbSession, user: CurrentUser, response: Response):
                 if available_start is not None and available_end is not None
                 else None
             )
+        if user.role == Role.VENDOR:
             approved = db.scalar(select(DataRequest.id).where(DataRequest.vendor_id == user.id, DataRequest.decision_a == 'approved', DataRequest.decision_b == 'approved').limit(1))
             if approved is not None:
                 result['analysis'] = traffic_summary(db)
@@ -407,6 +408,58 @@ def vendor_trajectories(
         headers={
             'Cache-Control': 'no-store',
             'Content-Disposition': f'attachment; filename="{filename}"',
+        },
+    )
+
+
+@router.get('/supervisor-a/locations')
+def supervisor_a_locations(
+    db: DbSession,
+    user: Annotated[User, Depends(require_roles(Role.SUPERVISOR_A))],
+    plate: Annotated[str, Query(min_length=1, max_length=32)],
+    start: datetime,
+    end: datetime,
+) -> Response:
+    if start.tzinfo is not None or end.tzinfo is not None:
+        raise HTTPException(422, 'Use local timestamps without a timezone offset')
+    if start > end:
+        raise HTTPException(422, 'Start must not be later than end')
+
+    plate_lookup = make_plate_lookup(plate)
+    vehicle_exists = db.scalar(
+        select(Vehicle.vehicle_id).where(Vehicle.plate_lookup == plate_lookup)
+    )
+    if vehicle_exists is None:
+        raise HTTPException(404, 'Vehicle is not available')
+
+    rows = list(db.scalars(
+        select(EncryptedTrajectory)
+        .where(
+            EncryptedTrajectory.plate_lookup == plate_lookup,
+            EncryptedTrajectory.timestamp >= start,
+            EncryptedTrajectory.timestamp <= end,
+        )
+        .order_by(EncryptedTrajectory.timestamp, EncryptedTrajectory.id)
+    ))
+    rows = list({row.timestamp: row for row in rows}.values())
+
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['timestamp', 'latitude', 'longitude'])
+    for row in rows:
+        location = decrypt_location(row.location_enc)
+        writer.writerow([
+            row.timestamp.isoformat(sep=' '),
+            f"{location['lat']:.6f}",
+            f"{location['lng']:.6f}",
+        ])
+
+    return Response(
+        content='\ufeff' + output.getvalue(),
+        media_type='text/csv; charset=utf-8',
+        headers={
+            'Cache-Control': 'no-store',
+            'Content-Disposition': 'attachment; filename="supervisor-a-locations.csv"',
         },
     )
 

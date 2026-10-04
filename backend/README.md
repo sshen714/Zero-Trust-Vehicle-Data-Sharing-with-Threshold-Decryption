@@ -55,6 +55,7 @@ police
 | `GET` | `/workspace` | 已登入 | 依角色回傳工作區標籤及目前可用資料 |
 | `GET` | `/workspace/trajectories` | `owner` | 依輸入車牌與選填時間下載模糊位置或速度 CSV |
 | `GET` | `/workspace/vendor/trajectories` | `vendor` | 依車牌與必填時間下載模糊位置或精準速度 CSV |
+| `GET` | `/workspace/supervisor-a/locations` | `supervisor_a` | 依車牌與必填時間下載精準位置 CSV |
 | `POST` | `/workspace/requests` | `vendor` | 提交資料使用目的 |
 | `POST` | `/workspace/requests/{request_id}/decision` | `supervisor_a`、`supervisor_b` | 記錄該主管的核准或拒絕決定 |
 
@@ -70,6 +71,8 @@ police
 車主軌跡查詢接收 `plate`、`data_type`，以及選填的 `start`、`end`。後端由輸入車牌計算 `plate_lookup`，確認 `vehicle_ownerships` 中的所有權，再篩選 `encrypted_trajectories`。`data_type=location` 會在記憶體副本中依時間間隔切分行程，每趟首尾至少移除 200～500 公尺及 1 分鐘；每趟行程的緯度與經度各使用一個由伺服器密鑰穩定產生、介於 `±0.0005°` 的固定偏移。相同資料重複下載會得到相同結果，避免利用多次亂數輸出取平均；同一趟行程採固定偏移，以保留軌跡的相對移動。位置資料先對完整行程套用 PETs，再依 `start`、`end` 篩選，避免以時間切割查詢繞過起訖點遮蔽。`data_type=speed` 只解密速度並輸出 10 km/h 區間。CSV 保留精確時間，但不包含原始位置、上下限、精確速度、車牌密文或其他密文欄位；處理結果不會回寫資料庫。
 
 合作廠商軌跡端點要求 `vendor` 角色、車牌、開始時間、結束時間及資料類型。模糊位置使用獨立於車主的固定偏移，精準速度只解密 `speed_enc`；輸出不包含任何車輛識別或密文。目前這個端點尚未檢查左側資料申請與主管核准狀態。
+
+主管 A 的位置端點要求 `supervisor_a` 角色、車牌及時間範圍，只解密 `location_enc` 並輸出精準經緯度。CSV 不包含車牌、lookup、速度或任何密文；左側精準速度申請尚未串接。
 
 公開平均速度會先依 `(plate_lookup, timestamp)` 去除重複模擬紀錄，計算每台車在所選時間內的平均速度，再平均所有車輛的結果。回應只包含 `average_speed_kmh`；少於三台車時回傳 `null`，不公開車輛數、單車速度、位置、軌跡或密文。
 

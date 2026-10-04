@@ -40,13 +40,14 @@
 <section class="feature-card">
 <h3>位置資料查詢</h3>
 <p>依車牌及時間查看位置資料。</p>
-<label for="supervisor_a-1-0">車牌</label>
-<input id="supervisor_a-1-0" type="text" placeholder="請輸入車牌">
-<label for="supervisor_a-1-1">開始時間</label>
-<input id="supervisor_a-1-1" type="datetime-local">
-<label for="supervisor_a-1-2">結束時間</label>
-<input id="supervisor_a-1-2" type="datetime-local">
-<div class="preview-actions"><button type="button" data-preview>查詢位置</button></div>
+<p id="supervisor-a-available-range">正在載入可查詢時間…</p>
+<label for="supervisor-a-plate">車牌</label>
+<input id="supervisor-a-plate" type="text" maxlength="32" autocomplete="off" placeholder="例如 V00000">
+<label for="supervisor-a-start">開始時間</label>
+<input id="supervisor-a-start" type="datetime-local" step="1">
+<label for="supervisor-a-end">結束時間</label>
+<input id="supervisor-a-end" type="datetime-local" step="1">
+<div class="preview-actions"><button id="supervisor-a-download" type="button">查詢位置</button></div>
 
 </section>
             </div>
