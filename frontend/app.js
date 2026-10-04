@@ -518,6 +518,73 @@ function initializeAdminWorkspace(token, workspaceData) {
 }
 
 
+function initializeResearcherWorkspace(token, workspaceData) {
+    const startInput = document.getElementById("researcher-start");
+    const endInput = document.getElementById("researcher-end");
+    const rangeText = document.getElementById("researcher-available-range");
+    const downloadButton = document.getElementById("researcher-download");
+    if (!startInput || !endInput || !rangeText || !downloadButton) return;
+
+    const availableRange = workspaceData.available_time_range;
+    if (availableRange?.start && availableRange?.end) {
+        const rangeStart = availableRange.start.slice(0, 19);
+        const rangeEnd = availableRange.end.slice(0, 19);
+        for (const input of [startInput, endInput]) {
+            input.min = rangeStart;
+            input.max = rangeEnd;
+        }
+        startInput.value = rangeStart;
+        endInput.value = rangeEnd;
+        rangeText.textContent = `可查詢時間：${displayDateTime(rangeStart)} ～ ${displayDateTime(rangeEnd)}`;
+    } else {
+        rangeText.textContent = "目前沒有可查詢的模擬資料。";
+        downloadButton.disabled = true;
+    }
+
+    downloadButton.addEventListener("click", async () => {
+        if (!startInput.value || !endInput.value) {
+            message.textContent = "請選擇開始時間與結束時間。";
+            return;
+        }
+        if (startInput.value > endInput.value) {
+            message.textContent = "開始時間不能晚於結束時間。";
+            return;
+        }
+
+        const params = new URLSearchParams({
+            start: startInput.value,
+            end: endInput.value,
+        });
+        downloadButton.disabled = true;
+        message.textContent = "正在解密並套用完整 PETs…";
+        try {
+            const blob = await authenticatedDownload(
+                `/workspace/researcher/trajectories?${params.toString()}`,
+                token,
+            );
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "researcher-trajectories.csv";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+            message.textContent = "研究資料 CSV 已下載。";
+        } catch (error) {
+            if (error.status === 401) {
+                clearSession();
+                location.replace("login.html?reason=session");
+                return;
+            }
+            message.textContent = error.message;
+        } finally {
+            downloadButton.disabled = false;
+        }
+    });
+}
+
+
 async function initializePublicVisitorPage() {
     const startInput = document.getElementById("visitor-start");
     const endInput = document.getElementById("visitor-end");
@@ -710,6 +777,7 @@ async function initializeProfilePage(profile) {
         if (user.role === "supervisor_a") initializeSupervisorAWorkspace(token, workspaceData);
         if (user.role === "supervisor_b") initializeSupervisorBWorkspace(token, workspaceData);
         if (user.role === "admin") initializeAdminWorkspace(token, workspaceData);
+        if (user.role === "researcher") initializeResearcherWorkspace(token, workspaceData);
     } catch (error) {
         if (error.status === 401 || error.status === 403) {
             clearSession();

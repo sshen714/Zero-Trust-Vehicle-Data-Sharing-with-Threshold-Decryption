@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy import select, func
 from scripts.decryption import decrypt_location, decrypt_speed
 from scripts.encryption import make_plate_lookup
-from scripts.pets import apply_owner_pets
+from scripts.pets import apply_owner_pets, apply_researcher_pets
 from .database import required_setting
 from .dependencies import CurrentUser, DbSession, require_roles
 from .models import (
@@ -200,6 +200,18 @@ def workspace(db: DbSession, user: CurrentUser, response: Response):
             else None
         )
         result['users'] = [dict(id=u.id, username=u.username, role=u.role, is_active=u.is_active) for u in db.scalars(select(User).order_by(User.id).limit(100))]
+    elif user.role == Role.RESEARCHER:
+        available_start, available_end = db.execute(
+            select(
+                func.min(EncryptedTrajectory.timestamp),
+                func.max(EncryptedTrajectory.timestamp),
+            )
+        ).one()
+        result['available_time_range'] = (
+            dict(start=available_start, end=available_end)
+            if available_start is not None and available_end is not None
+            else None
+        )
     else:
         result['notice'] = '此身份已加入，資料查詢功能尚未實作。'
     return result
@@ -235,6 +247,15 @@ def admin_pet_rng(plate_lookup):
     seed_bytes = hmac.new(
         required_setting('LOCATION_KEY').encode('utf-8'),
         f'admin-location-pets|{plate_lookup}'.encode('ascii'),
+        hashlib.sha256,
+    ).digest()
+    return np.random.default_rng(int.from_bytes(seed_bytes[:8], 'big'))
+
+
+def researcher_pet_rng():
+    seed_bytes = hmac.new(
+        required_setting('LOCATION_KEY').encode('utf-8'),
+        b'researcher-full-pets',
         hashlib.sha256,
     ).digest()
     return np.random.default_rng(int.from_bytes(seed_bytes[:8], 'big'))
@@ -644,6 +665,79 @@ def admin_trajectories(
         headers={
             'Cache-Control': 'no-store',
             'Content-Disposition': 'attachment; filename="admin-trajectories.csv"',
+        },
+    )
+
+
+@router.get('/researcher/trajectories')
+def researcher_trajectories(
+    db: DbSession,
+    user: Annotated[User, Depends(require_roles(Role.RESEARCHER))],
+    start: datetime,
+    end: datetime,
+) -> Response:
+    if start.tzinfo is not None or end.tzinfo is not None:
+        raise HTTPException(422, 'Use local timestamps without a timezone offset')
+    if start > end:
+        raise HTTPException(422, 'Start must not be later than end')
+
+    rows = list(db.scalars(
+        select(EncryptedTrajectory).order_by(
+            EncryptedTrajectory.plate_lookup,
+            EncryptedTrajectory.timestamp,
+            EncryptedTrajectory.id,
+        )
+    ))
+    rows = list({(row.plate_lookup, row.timestamp): row for row in rows}.values())
+
+    decrypted_rows = []
+    for row in rows:
+        location = decrypt_location(row.location_enc)
+        decrypted_rows.append({
+            'vehicle_id': row.plate_lookup,
+            'timestamp': row.timestamp,
+            'lat': location['lat'],
+            'lng': location['lng'],
+            'speed_kmh': decrypt_speed(row.speed_enc),
+        })
+
+    protected = (
+        apply_researcher_pets(
+            pd.DataFrame(decrypted_rows),
+            rng=researcher_pet_rng(),
+        )
+        if decrypted_rows else pd.DataFrame()
+    )
+    if not protected.empty:
+        protected = protected[
+            (protected['timestamp'] >= start)
+            & (protected['timestamp'] <= end)
+        ].sort_values(['timestamp', 'pseudo_id'])
+
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'coarsened_timestamp',
+        'pseudonym',
+        'approximate_latitude',
+        'approximate_longitude',
+        'approximate_speed_kmh',
+    ])
+    for row in protected.itertuples(index=False):
+        writer.writerow([
+            row.timestamp.isoformat(sep=' '),
+            row.pseudo_id,
+            f'{row.lat:.6f}',
+            f'{row.lng:.6f}',
+            f'{row.speed_kmh:.1f}',
+        ])
+
+    return Response(
+        content='\ufeff' + output.getvalue(),
+        media_type='text/csv; charset=utf-8',
+        headers={
+            'Cache-Control': 'no-store',
+            'Content-Disposition': 'attachment; filename="researcher-trajectories.csv"',
         },
     )
 

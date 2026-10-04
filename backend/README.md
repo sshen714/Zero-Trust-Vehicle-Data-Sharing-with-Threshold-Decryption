@@ -58,6 +58,7 @@ police
 | `GET` | `/workspace/supervisor-a/locations` | `supervisor_a` | 依車牌與必填時間下載精準位置 CSV |
 | `GET` | `/workspace/supervisor-b/speeds` | `supervisor_b` | 依車牌與必填時間下載精準速度 CSV |
 | `GET` | `/workspace/admin/trajectories` | `admin` | 依車牌或速度範圍與必填時間下載模糊軌跡 CSV |
+| `GET` | `/workspace/researcher/trajectories` | `researcher` | 依必填時間下載套用完整 PETs 的研究 CSV |
 | `POST` | `/workspace/requests` | `vendor` | 提交資料使用目的 |
 | `POST` | `/workspace/requests/{request_id}/decision` | `supervisor_a`、`supervisor_b` | 記錄該主管的核准或拒絕決定 |
 

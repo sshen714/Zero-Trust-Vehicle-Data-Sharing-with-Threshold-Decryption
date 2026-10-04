@@ -25,11 +25,12 @@
 <section class="feature-card">
 <h3>研究資料</h3>
 <p>取得經隱私處理的研究資料，不提供指定車牌查詢。</p>
-<label for="researcher-0-0">開始時間</label>
-<input id="researcher-0-0" type="datetime-local">
-<label for="researcher-0-1">結束時間</label>
-<input id="researcher-0-1" type="datetime-local">
-<div class="preview-actions"><button type="button" data-preview>查看研究資料</button></div>
+<p id="researcher-available-range">正在載入可查詢時間…</p>
+<label for="researcher-start">開始時間</label>
+<input id="researcher-start" type="datetime-local" step="1">
+<label for="researcher-end">結束時間</label>
+<input id="researcher-end" type="datetime-local" step="1">
+<div class="preview-actions"><button id="researcher-download" type="button">查看研究資料</button></div>
 
 </section>
             </div>
