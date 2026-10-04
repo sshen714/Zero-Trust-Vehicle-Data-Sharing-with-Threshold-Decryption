@@ -19,28 +19,25 @@
             <h2>警方工作區</h2>
             <p>肇逃、事故案件調查</p>
             <p class="preview-notice">介面展示：以下內容與操作尚未連接資料查詢、申請、審核或 OTP 服務。</p>
-            <ul class="access-list"><li>依案件編號、車牌與時間查詢</li><li>時間精準，位置與速度預設模糊</li><li>Email OTP 驗證後依案件授權解鎖</li></ul>
+            <ul class="access-list"><li>依車牌與時間查詢</li><li>時間精準，位置與速度預設模糊</li><li>Email OTP 驗證後解鎖授權欄位</li></ul>
             
             <div class="role-grid">
 <section class="feature-card">
-<h3>案件資料查詢</h3>
-<p>填寫案件編號與查詢條件。</p>
-<label for="police-0-0">案件編號</label>
-<input id="police-0-0" type="text" placeholder="請輸入案件編號">
+<h3>資料查詢</h3>
+<p>填寫車牌與時間條件。</p>
 <label for="police-0-1">車牌</label>
 <input id="police-0-1" type="text" placeholder="請輸入車牌">
 <label for="police-0-2">開始時間</label>
 <input id="police-0-2" type="datetime-local">
 <label for="police-0-3">結束時間</label>
 <input id="police-0-3" type="datetime-local">
-<div class="preview-actions"><button type="button" data-preview>查詢案件</button></div>
+<div class="preview-actions"><button type="button" data-preview>下載模糊位置 CSV</button>
+<button type="button" data-preview>下載模糊速度 CSV</button></div>
 
 </section>
 <section class="feature-card">
-<h3>案件授權驗證</h3>
-<p>驗證 Email OTP 後查看案件授權欄位。</p>
-<label for="police-1-0">案件編號</label>
-<input id="police-1-0" type="text" placeholder="請輸入案件編號">
+<h3>授權驗證</h3>
+<p>驗證 Email OTP 後查看授權欄位。</p>
 <label for="police-1-1">Email OTP</label>
 <input id="police-1-1" type="text" placeholder="請輸入Email OTP">
 <div class="preview-actions"><button type="button" data-preview>驗證 OTP</button>

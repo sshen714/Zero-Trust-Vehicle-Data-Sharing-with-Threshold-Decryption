@@ -233,7 +233,7 @@ vehicle_data_sharing.encrypted_trajectories
 | 主管 B | `demo_supervisor_b` | 速度查詢、主管 A OTP 申請與驗證入口（精準位置） |
 | 系統管理者 | `demo_admin` | 帳號管理、服務與日誌、資料查詢及 OTP 入口 |
 | 交通研究者 | `demo_researcher` | 依時間查詢研究資料，不顯示車牌查詢欄位 |
-| 警方 | `demo_police` | 依案件編號、車牌與時間查詢，以及案件 OTP 申請與驗證入口 |
+| 警方 | `demo_police` | 依車牌與時間查詢，以及 Email OTP 申請與驗證入口 |
 
 操作方式：開啟 `http://127.0.0.1:5500/login.html`；訪客直接點選「訪客」，其他身份輸入測試帳號。車主可下載本人綁定車輛的模糊位置或速度 CSV；公開訪客只能查詢整體平均速度，沒有下載功能。
 
