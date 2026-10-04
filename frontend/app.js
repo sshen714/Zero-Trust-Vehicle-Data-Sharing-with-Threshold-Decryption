@@ -169,6 +169,87 @@ function initializeOwnerWorkspace(token, workspaceData) {
 }
 
 
+function initializeVendorWorkspace(token, workspaceData) {
+    const plateInput = document.getElementById("vendor-plate");
+    const startInput = document.getElementById("vendor-start");
+    const endInput = document.getElementById("vendor-end");
+    const rangeText = document.getElementById("vendor-available-range");
+    const buttons = [...document.querySelectorAll("[data-vendor-export]")];
+    if (!plateInput || !startInput || !endInput || !rangeText || !buttons.length) return;
+
+    const availableRange = workspaceData.available_time_range;
+    if (availableRange?.start && availableRange?.end) {
+        const rangeStart = availableRange.start.slice(0, 19);
+        const rangeEnd = availableRange.end.slice(0, 19);
+        for (const input of [startInput, endInput]) {
+            input.min = rangeStart;
+            input.max = rangeEnd;
+        }
+        startInput.value = rangeStart;
+        endInput.value = rangeEnd;
+        rangeText.textContent = `可查詢時間：${displayDateTime(rangeStart)} ～ ${displayDateTime(rangeEnd)}`;
+    } else {
+        rangeText.textContent = "目前沒有可查詢的模擬資料。";
+        buttons.forEach((button) => { button.disabled = true; });
+    }
+
+    buttons.forEach((button) => {
+        button.addEventListener("click", async () => {
+            const plate = plateInput.value.trim();
+            if (!plate) {
+                message.textContent = "請先輸入車牌。";
+                plateInput.focus();
+                return;
+            }
+            if (!startInput.value || !endInput.value) {
+                message.textContent = "請選擇開始時間與結束時間。";
+                return;
+            }
+            if (startInput.value > endInput.value) {
+                message.textContent = "開始時間不能晚於結束時間。";
+                return;
+            }
+
+            const dataType = button.dataset.vendorExport;
+            const params = new URLSearchParams({
+                plate,
+                data_type: dataType,
+                start: startInput.value,
+                end: endInput.value,
+            });
+            buttons.forEach((item) => { item.disabled = true; });
+            message.textContent = "正在解密並產生 CSV…";
+            try {
+                const blob = await authenticatedDownload(
+                    `/workspace/vendor/trajectories?${params.toString()}`,
+                    token,
+                );
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = `vendor-${dataType}-trajectories.csv`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(url);
+                message.textContent = dataType === "location"
+                    ? "模糊位置 CSV 已下載。"
+                    : "精準速度 CSV 已下載。";
+            } catch (error) {
+                if (error.status === 401) {
+                    clearSession();
+                    location.replace("login.html?reason=session");
+                    return;
+                }
+                message.textContent = error.message;
+            } finally {
+                buttons.forEach((item) => { item.disabled = false; });
+            }
+        });
+    });
+}
+
+
 async function initializePublicVisitorPage() {
     const startInput = document.getElementById("visitor-start");
     const endInput = document.getElementById("visitor-end");
@@ -357,6 +438,7 @@ async function initializeProfilePage(profile) {
         });
         const workspaceData = await loadWorkspace(workspace, token, user.role);
         if (user.role === "owner") initializeOwnerWorkspace(token, workspaceData);
+        if (user.role === "vendor") initializeVendorWorkspace(token, workspaceData);
     } catch (error) {
         if (error.status === 401 || error.status === 403) {
             clearSession();

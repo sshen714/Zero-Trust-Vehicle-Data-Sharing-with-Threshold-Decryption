@@ -39,15 +39,16 @@
 <section class="feature-card">
 <h3>核准資料分析</h3>
 <p>查看核准範圍內的資料，並申請精準位置。</p>
-<label for="vendor-1-0">車輛</label>
-<input id="vendor-1-0" type="text" placeholder="請輸入車輛">
-<label for="vendor-1-1">開始時間</label>
-<input id="vendor-1-1" type="datetime-local">
-<label for="vendor-1-2">結束時間</label>
-<input id="vendor-1-2" type="datetime-local">
+<p id="vendor-available-range">正在載入可查詢時間…</p>
+<label for="vendor-plate">車牌</label>
+<input id="vendor-plate" type="text" maxlength="32" autocomplete="off" placeholder="例如 V00000">
+<label for="vendor-start">開始時間</label>
+<input id="vendor-start" type="datetime-local" step="1">
+<label for="vendor-end">結束時間</label>
+<input id="vendor-end" type="datetime-local" step="1">
 <div class="preview-actions">
-<button type="button" data-preview>下載模糊位置 CSV</button>
-<button type="button" data-preview>下載精準速度 CSV</button>
+<button type="button" data-vendor-export="location">下載模糊位置 CSV</button>
+<button type="button" data-vendor-export="speed">下載精準速度 CSV</button>
 </div>
 
 </section>

@@ -166,6 +166,17 @@ def workspace(db: DbSession, user: CurrentUser, response: Response):
             query = query.where(DataRequest.vendor_id == user.id)
         result['requests'] = [request_view(r) for r in db.scalars(query)]
         if user.role == Role.VENDOR:
+            available_start, available_end = db.execute(
+                select(
+                    func.min(EncryptedTrajectory.timestamp),
+                    func.max(EncryptedTrajectory.timestamp),
+                )
+            ).one()
+            result['available_time_range'] = (
+                dict(start=available_start, end=available_end)
+                if available_start is not None and available_end is not None
+                else None
+            )
             approved = db.scalar(select(DataRequest.id).where(DataRequest.vendor_id == user.id, DataRequest.decision_a == 'approved', DataRequest.decision_b == 'approved').limit(1))
             if approved is not None:
                 result['analysis'] = traffic_summary(db)
@@ -196,6 +207,15 @@ def owner_pet_rng(plate_lookup):
     seed_bytes = hmac.new(
         required_setting('LOCATION_KEY').encode('utf-8'),
         f'owner-location-pets|{plate_lookup}'.encode('ascii'),
+        hashlib.sha256,
+    ).digest()
+    return np.random.default_rng(int.from_bytes(seed_bytes[:8], 'big'))
+
+
+def vendor_pet_rng(plate_lookup):
+    seed_bytes = hmac.new(
+        required_setting('LOCATION_KEY').encode('utf-8'),
+        f'vendor-location-pets|{plate_lookup}'.encode('ascii'),
         hashlib.sha256,
     ).digest()
     return np.random.default_rng(int.from_bytes(seed_bytes[:8], 'big'))
@@ -292,6 +312,95 @@ def owner_trajectories(
             ])
 
     filename = f"owner-{data_type}-trajectories.csv"
+    return Response(
+        content='\ufeff' + output.getvalue(),
+        media_type='text/csv; charset=utf-8',
+        headers={
+            'Cache-Control': 'no-store',
+            'Content-Disposition': f'attachment; filename="{filename}"',
+        },
+    )
+
+
+@router.get('/vendor/trajectories')
+def vendor_trajectories(
+    db: DbSession,
+    user: Annotated[User, Depends(require_roles(Role.VENDOR))],
+    plate: Annotated[str, Query(min_length=1, max_length=32)],
+    data_type: Literal['location', 'speed'],
+    start: datetime,
+    end: datetime,
+) -> Response:
+    if start.tzinfo is not None or end.tzinfo is not None:
+        raise HTTPException(422, 'Use local timestamps without a timezone offset')
+    if start > end:
+        raise HTTPException(422, 'Start must not be later than end')
+
+    plate_lookup = make_plate_lookup(plate)
+    vehicle_exists = db.scalar(
+        select(Vehicle.vehicle_id).where(Vehicle.plate_lookup == plate_lookup)
+    )
+    if vehicle_exists is None:
+        raise HTTPException(404, 'Vehicle is not available')
+
+    conditions = [EncryptedTrajectory.plate_lookup == plate_lookup]
+    if data_type == 'speed':
+        conditions.extend([
+            EncryptedTrajectory.timestamp >= start,
+            EncryptedTrajectory.timestamp <= end,
+        ])
+    rows = list(db.scalars(
+        select(EncryptedTrajectory)
+        .where(*conditions)
+        .order_by(EncryptedTrajectory.timestamp, EncryptedTrajectory.id)
+    ))
+    rows = list({row.timestamp: row for row in rows}.values())
+
+    output = StringIO()
+    writer = csv.writer(output)
+    if data_type == 'location':
+        location_rows = []
+        for row in rows:
+            location = decrypt_location(row.location_enc)
+            location_rows.append({
+                'vehicle_id': plate_lookup,
+                'timestamp': row.timestamp,
+                'lat': location['lat'],
+                'lng': location['lng'],
+                'speed_kmh': 0,
+            })
+        rng = vendor_pet_rng(plate_lookup)
+        protected = apply_owner_pets(
+            pd.DataFrame(location_rows),
+            rng=rng,
+        ) if location_rows else pd.DataFrame()
+        if not protected.empty:
+            trip_groups = protected['timestamp'].diff().dt.total_seconds().gt(300).cumsum()
+            protected['approximate_latitude'] = protected['lat']
+            protected['approximate_longitude'] = protected['lng']
+            for _, indexes in protected.groupby(trip_groups, sort=False).groups.items():
+                protected.loc[indexes, 'approximate_latitude'] += rng.uniform(-0.0005, 0.0005)
+                protected.loc[indexes, 'approximate_longitude'] += rng.uniform(-0.0005, 0.0005)
+            protected = protected[
+                (protected['timestamp'] >= start)
+                & (protected['timestamp'] <= end)
+            ]
+        writer.writerow(['timestamp', 'approximate_latitude', 'approximate_longitude'])
+        for row in protected.itertuples(index=False):
+            writer.writerow([
+                row.timestamp.isoformat(sep=' '),
+                f'{row.approximate_latitude:.6f}',
+                f'{row.approximate_longitude:.6f}',
+            ])
+    else:
+        writer.writerow(['timestamp', 'speed_kmh'])
+        for row in rows:
+            writer.writerow([
+                row.timestamp.isoformat(sep=' '),
+                f'{decrypt_speed(row.speed_enc):.1f}',
+            ])
+
+    filename = f'vendor-{data_type}-trajectories.csv'
     return Response(
         content='\ufeff' + output.getvalue(),
         media_type='text/csv; charset=utf-8',
