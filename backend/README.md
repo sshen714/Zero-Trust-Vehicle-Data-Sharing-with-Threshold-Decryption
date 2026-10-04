@@ -71,6 +71,10 @@ police
 | `POST` | `/workspace/admin/location-requests/{request_id}/verify-otp` | `admin` | 驗證本人申請的 OTP 並下載精準位置 CSV |
 | `POST` | `/workspace/admin/speed-requests` | `admin` | 依必填車牌與選填時間建立精準速度 Demo OTP 申請 |
 | `POST` | `/workspace/admin/speed-requests/{request_id}/verify-otp` | `admin` | 驗證本人申請的 OTP 並下載精準速度 CSV |
+| `POST` | `/workspace/police/location-requests` | `police` | 依車牌與時間建立精準位置 Demo OTP 申請 |
+| `POST` | `/workspace/police/location-requests/{request_id}/verify-otp` | `police` | 驗證本人申請的 OTP 並下載精準位置 CSV |
+| `POST` | `/workspace/police/speed-requests` | `police` | 依車牌與時間建立精準速度 Demo OTP 申請 |
+| `POST` | `/workspace/police/speed-requests/{request_id}/verify-otp` | `police` | 驗證本人申請的 OTP 並下載精準速度 CSV |
 | `POST` | `/workspace/requests/{request_id}/decision` | `supervisor_a`、`supervisor_b` | 記錄該主管的核准或拒絕決定 |
 
 `GET /workspace` 目前依角色回傳以下資料：
@@ -96,7 +100,7 @@ police
 
 ## 資料模型
 
-管理者 OTP 申請車牌必填，時間範圍選填且需成對提供。只提供車牌時，後端以該車目前的最早及最晚軌跡時間固定範圍。車牌不存在或申請範圍沒有軌跡時，不建立 OTP；驗證時若已沒有軌跡，也不提供空 CSV。一般管理者資料下載同樣要求車牌，篩選及 PETs 處理後沒有資料時回傳錯誤。建立回應提供固定後的 `plate`、`start`、`end`，驗證時需使用相同範圍。OTP 雜湊綁定申請 ID、資料類型、車牌條件與完整時間精度，五分鐘有效，最多錯誤五次，成功即刪除 OTP。位置 CSV 僅含時間、經緯度，速度 CSV 僅含時間與精準速度，不含車牌或密文。此流程與其他 OTP 同為本機 Demo，API 回傳 `demo_otp`，尚未寄信或串接主管核准。
+管理者 OTP 申請車牌必填，時間範圍選填且需成對提供。只提供車牌時，後端以該車目前的最早及最晚軌跡時間固定範圍。警方 OTP 申請要求車牌及完整時間範圍。車牌不存在或申請範圍沒有軌跡時，不建立 OTP；驗證時若已沒有軌跡，也不提供空 CSV。一般管理者資料下載同樣要求車牌，篩選及 PETs 處理後沒有資料時回傳錯誤。建立回應提供固定後的 `plate`、`start`、`end`，驗證時需使用相同範圍。OTP 雜湊綁定申請者類型、申請 ID、資料類型、車牌條件與完整時間精度，五分鐘有效，最多錯誤五次，成功即刪除 OTP。位置 CSV 僅含時間、經緯度，速度 CSV 僅含時間與精準速度，不含車牌或密文。此流程與其他 OTP 同為本機 Demo，API 回傳 `demo_otp`，尚未寄信或串接主管核准。
 
 所有登入身份共用 `users`，角色特有的資料保存在個別業務表，不為每個角色建立重複的帳號表。
 

@@ -1305,14 +1305,14 @@ def verify_supervisor_b_location_otp(
         },
     )
 
-class AdminOtpRequestInput(BaseModel):
+class ScopedOtpRequestInput(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
     plate: str = Field(min_length=1, max_length=32)
     start: datetime | None = None
     end: datetime | None = None
 
 
-class AdminOtpVerificationInput(BaseModel):
+class ScopedOtpVerificationInput(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
     otp: str = Field(pattern=r'^\d{6}$')
     plate: str = Field(min_length=1, max_length=32)
@@ -1320,23 +1320,24 @@ class AdminOtpVerificationInput(BaseModel):
     end: datetime
 
 
-def validate_admin_otp_times(start: datetime, end: datetime) -> None:
+def validate_scoped_otp_times(start: datetime, end: datetime) -> None:
     if start.tzinfo is not None or end.tzinfo is not None:
         raise HTTPException(422, 'Use local timestamps without a timezone offset')
     if start > end:
         raise HTTPException(422, 'Start must not be later than end')
 
 
-def admin_otp_digest(data_type, request_id, otp, plate_lookup, start, end):
+def scoped_otp_digest(actor_kind, data_type, request_id, otp, plate_lookup, start, end):
     # Bind full timestamp precision; verification must not widen the scope
     # within the same second accepted by the older OTP helper.
-    namespace = f'admin-{data_type}-otp:{start.isoformat()}:{end.isoformat()}'
+    namespace = f'{actor_kind}-{data_type}-otp:{start.isoformat()}:{end.isoformat()}'
     return otp_digest(namespace, request_id, otp, plate_lookup or '*', start, end)
 
 
-def submit_admin_otp_request(
+def submit_scoped_otp_request(
+    actor_kind: Literal['admin', 'police'],
     data_type: Literal['location', 'speed'],
-    data: AdminOtpRequestInput,
+    data: ScopedOtpRequestInput,
     db: DbSession,
     user: Annotated[User, Depends(require_roles(Role.ADMIN))],
     response: Response,
@@ -1358,7 +1359,7 @@ def submit_admin_otp_request(
         raise HTTPException(404, 'No trajectories available')
     start = data.start if data.start is not None else available_start
     end = data.end if data.end is not None else available_end
-    validate_admin_otp_times(start, end)
+    validate_scoped_otp_times(start, end)
     # Explicit time ranges use the same global bounds as the workspace UI.
     global_start, global_end = db.execute(select(
         func.min(EncryptedTrajectory.timestamp), func.max(EncryptedTrajectory.timestamp),
@@ -1373,7 +1374,7 @@ def submit_admin_otp_request(
         raise HTTPException(404, 'No trajectories available')
     request_row = DataRequest(
         vendor_id=user.id,
-        purpose=f'admin-{data_type}-otp',
+        purpose=f'{actor_kind}-{data_type}-otp',
         decision_a='pending' if data_type == 'location' else 'not_required',
         decision_b='pending' if data_type == 'speed' else 'not_required',
     )
@@ -1385,7 +1386,9 @@ def submit_admin_otp_request(
     expires_at = now + timedelta(minutes=5)
     db.add(OtpChallenge(
         request_id=request_row.id,
-        otp_hash=admin_otp_digest(data_type, request_row.id, otp, plate_lookup, start, end),
+        otp_hash=scoped_otp_digest(
+            actor_kind, data_type, request_row.id, otp, plate_lookup, start, end,
+        ),
         expires_at=expires_at,
     ))
     db.commit()
@@ -1402,18 +1405,19 @@ def submit_admin_otp_request(
     }
 
 
-def verify_admin_otp(
+def verify_scoped_otp(
+    actor_kind: Literal['admin', 'police'],
     data_type: Literal['location', 'speed'],
     request_id: int,
-    data: AdminOtpVerificationInput,
+    data: ScopedOtpVerificationInput,
     db: DbSession,
     user: Annotated[User, Depends(require_roles(Role.ADMIN))],
 ):
-    validate_admin_otp_times(data.start, data.end)
+    validate_scoped_otp_times(data.start, data.end)
     request_row = db.scalar(select(DataRequest).where(
         DataRequest.id == request_id,
         DataRequest.vendor_id == user.id,
-        DataRequest.purpose == f'admin-{data_type}-otp',
+        DataRequest.purpose == f'{actor_kind}-{data_type}-otp',
     ))
     if request_row is None:
         raise HTTPException(404, 'Request not found')
@@ -1435,8 +1439,10 @@ def verify_admin_otp(
         db.commit()
         raise HTTPException(429, 'OTP attempt limit reached')
     plate_lookup = make_plate_lookup(data.plate)
-    expected = admin_otp_digest(data_type, request_id, data.otp,
-                               plate_lookup, data.start, data.end)
+    expected = scoped_otp_digest(
+        actor_kind, data_type, request_id, data.otp,
+        plate_lookup, data.start, data.end,
+    )
     if not hmac.compare_digest(challenge.otp_hash, expected):
         challenge.attempt_count += 1
         exhausted = challenge.attempt_count >= challenge.max_attempts
@@ -1478,7 +1484,7 @@ def verify_admin_otp(
         headers={
             'Cache-Control': 'no-store',
             'Content-Disposition': (
-                f'attachment; filename="admin-authorized-{data_type}.csv"'
+                f'attachment; filename="{actor_kind}-authorized-{data_type}.csv"'
             ),
         },
     )
@@ -1486,42 +1492,82 @@ def verify_admin_otp(
 
 @router.post('/admin/location-requests', status_code=201)
 def submit_admin_location_request(
-    data: AdminOtpRequestInput,
+    data: ScopedOtpRequestInput,
     db: DbSession,
     user: Annotated[User, Depends(require_roles(Role.ADMIN))],
     response: Response,
 ):
-    return submit_admin_otp_request('location', data, db, user, response)
+    return submit_scoped_otp_request('admin', 'location', data, db, user, response)
 
 
 @router.post('/admin/location-requests/{request_id}/verify-otp')
 def verify_admin_location_otp(
     request_id: int,
-    data: AdminOtpVerificationInput,
+    data: ScopedOtpVerificationInput,
     db: DbSession,
     user: Annotated[User, Depends(require_roles(Role.ADMIN))],
 ):
-    return verify_admin_otp('location', request_id, data, db, user)
+    return verify_scoped_otp('admin', 'location', request_id, data, db, user)
 
 
 @router.post('/admin/speed-requests', status_code=201)
 def submit_admin_speed_request(
-    data: AdminOtpRequestInput,
+    data: ScopedOtpRequestInput,
     db: DbSession,
     user: Annotated[User, Depends(require_roles(Role.ADMIN))],
     response: Response,
 ):
-    return submit_admin_otp_request('speed', data, db, user, response)
+    return submit_scoped_otp_request('admin', 'speed', data, db, user, response)
 
 
 @router.post('/admin/speed-requests/{request_id}/verify-otp')
 def verify_admin_speed_otp(
     request_id: int,
-    data: AdminOtpVerificationInput,
+    data: ScopedOtpVerificationInput,
     db: DbSession,
     user: Annotated[User, Depends(require_roles(Role.ADMIN))],
 ):
-    return verify_admin_otp('speed', request_id, data, db, user)
+    return verify_scoped_otp('admin', 'speed', request_id, data, db, user)
+
+
+@router.post('/police/location-requests', status_code=201)
+def submit_police_location_request(
+    data: ScopedOtpRequestInput,
+    db: DbSession,
+    user: Annotated[User, Depends(require_roles(Role.POLICE))],
+    response: Response,
+):
+    return submit_scoped_otp_request('police', 'location', data, db, user, response)
+
+
+@router.post('/police/location-requests/{request_id}/verify-otp')
+def verify_police_location_otp(
+    request_id: int,
+    data: ScopedOtpVerificationInput,
+    db: DbSession,
+    user: Annotated[User, Depends(require_roles(Role.POLICE))],
+):
+    return verify_scoped_otp('police', 'location', request_id, data, db, user)
+
+
+@router.post('/police/speed-requests', status_code=201)
+def submit_police_speed_request(
+    data: ScopedOtpRequestInput,
+    db: DbSession,
+    user: Annotated[User, Depends(require_roles(Role.POLICE))],
+    response: Response,
+):
+    return submit_scoped_otp_request('police', 'speed', data, db, user, response)
+
+
+@router.post('/police/speed-requests/{request_id}/verify-otp')
+def verify_police_speed_otp(
+    request_id: int,
+    data: ScopedOtpVerificationInput,
+    db: DbSession,
+    user: Annotated[User, Depends(require_roles(Role.POLICE))],
+):
+    return verify_scoped_otp('police', 'speed', request_id, data, db, user)
 
 
 class DecisionInput(BaseModel):

@@ -1333,7 +1333,7 @@ function initializeLoginPage(form) {
 }
 
 
-async function initializePoliceOtpPreview() {
+async function initializePoliceOtpWorkspace(token) {
     const form = document.getElementById("police-otp-form");
     const plateInput = document.getElementById("police-otp-plate");
     const startInput = document.getElementById("police-otp-start");
@@ -1350,7 +1350,26 @@ async function initializePoliceOtpPreview() {
         || !requestActions || requestButtons.length !== 2 || !otpEntry
         || !otpLabel || !otpInput || !otpButton || !statusText) return;
 
-    let requestedDataType = null;
+    let requestScope = null;
+    let completed = false;
+    let busy = false;
+    function setBusy(value) {
+        busy = value;
+        for (const control of [plateInput, startInput, endInput, otpInput,
+            otpButton, ...requestButtons]) {
+            control.disabled = value;
+        }
+        otpInput.disabled = value || completed;
+    }
+    function clearRequest() {
+        requestScope = null;
+        completed = false;
+        otpButton.hidden = false;
+        otpInput.disabled = false;
+        requestActions.hidden = false;
+        otpEntry.hidden = true;
+        otpInput.value = "";
+    }
     try {
         const availableRange = await apiRequest("/public/traffic-range");
         if (availableRange?.start && availableRange?.end) {
@@ -1373,18 +1392,16 @@ async function initializePoliceOtpPreview() {
         statusText.textContent = error.message;
     }
     form.addEventListener("input", () => {
-        requestedDataType = null;
-        requestActions.hidden = false;
-        otpEntry.hidden = true;
-        otpInput.value = "";
+        clearRequest();
         statusText.textContent = "";
     });
     otpInput.addEventListener("input", () => {
         otpInput.value = otpInput.value.replace(/\D/g, "").slice(0, 6);
         statusText.textContent = "";
     });
-    form.addEventListener("submit", (event) => {
+    form.addEventListener("submit", async (event) => {
         event.preventDefault();
+        if (busy || requestScope) return;
         const plate = plateInput.value.trim();
         if (!plate) {
             statusText.textContent = "請先輸入車牌。";
@@ -1399,26 +1416,98 @@ async function initializePoliceOtpPreview() {
             statusText.textContent = "開始時間不能晚於結束時間。";
             return;
         }
-        requestedDataType = event.submitter?.value === "speed" ? "speed" : "location";
-        const dataLabel = requestedDataType === "speed" ? "精準速度" : "精準位置";
-        requestActions.hidden = true;
-        otpLabel.textContent = `${dataLabel} Email OTP`;
-        otpInput.value = "";
-        otpEntry.hidden = false;
-        otpInput.focus();
-        statusText.textContent = `${dataLabel}申請條件已確認：${plate}，${displayDateTime(startInput.value)} ～ ${displayDateTime(endInput.value)}。目前僅提供前端預覽，尚未送出 Email OTP 申請。`;
+        const dataType = event.submitter?.value === "speed" ? "speed" : "location";
+        const dataLabel = dataType === "speed" ? "精準速度" : "精準位置";
+        setBusy(true);
+        statusText.textContent = `正在建立${dataLabel}申請與 Demo OTP…`;
+        try {
+            const result = await authenticatedRequest(
+                `/workspace/police/${dataType}-requests`,
+                token,
+                {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        plate,
+                        start: startInput.value,
+                        end: endInput.value,
+                    }),
+                },
+            );
+            requestScope = result;
+            requestActions.hidden = true;
+            otpLabel.textContent = `${dataLabel} Email OTP`;
+            otpInput.value = "";
+            otpEntry.hidden = false;
+            statusText.textContent = `Demo OTP：${result.demo_otp}（5 分鐘內有效）`;
+        } catch (error) {
+            if (error.status === 401) {
+                clearSession();
+                location.replace("login.html?reason=session");
+                return;
+            }
+            statusText.textContent = error.message;
+        } finally {
+            setBusy(false);
+            if (requestScope) otpInput.focus();
+        }
     });
-    otpButton.addEventListener("click", () => {
-        if (!requestedDataType) {
-            statusText.textContent = "請先選擇精準位置或精準速度申請。";
+    otpButton.addEventListener("click", async () => {
+        if (busy) return;
+        if (!Number.isInteger(requestScope?.request_id)) {
+            statusText.textContent = "請先送出申請。";
             return;
         }
         if (!/^\d{6}$/.test(otpInput.value)) {
             statusText.textContent = "請輸入完整的 6 位數 Email OTP。";
             return;
         }
-        const dataLabel = requestedDataType === "speed" ? "精準速度" : "精準位置";
-        statusText.textContent = `${dataLabel} OTP 格式已確認。目前僅提供前端預覽，尚未驗證或下載資料。`;
+        const request = requestScope;
+        const dataLabel = request.data_type === "speed" ? "精準速度" : "精準位置";
+        setBusy(true);
+        statusText.textContent = "正在驗證 OTP…";
+        try {
+            const blob = await authenticatedPostDownload(
+                `/workspace/police/${request.data_type}-requests/${request.request_id}/verify-otp`,
+                token,
+                {
+                    otp: otpInput.value,
+                    plate: request.plate,
+                    start: request.start,
+                    end: request.end,
+                },
+            );
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `police-authorized-${request.data_type}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+            requestScope = null;
+            completed = true;
+            otpInput.disabled = true;
+            otpButton.hidden = true;
+            statusText.textContent = `OTP 驗證成功，${dataLabel} CSV 已下載。`;
+        } catch (error) {
+            if (error.status === 401) {
+                clearSession();
+                location.replace("login.html?reason=session");
+                return;
+            }
+            const messages = {
+                404: "找不到申請、車輛資料或 OTP 已失效，請重新送出申請。",
+                409: "OTP 已使用，請重新送出申請。",
+                410: "OTP 已過期，請重新送出申請。",
+                422: "OTP 不正確，請重新輸入。",
+                429: "OTP 錯誤次數已達上限，請重新送出申請。",
+            };
+            if ([404, 409, 410, 429].includes(error.status)) clearRequest();
+            statusText.textContent = messages[error.status] || error.message;
+        } finally {
+            setBusy(false);
+        }
     });
 }
 
@@ -1464,7 +1553,7 @@ async function initializeProfilePage(profile) {
         if (user.role === "supervisor_b") initializeSupervisorBWorkspace(token, workspaceData);
         if (user.role === "admin") initializeAdminWorkspace(token, workspaceData);
         if (user.role === "researcher") initializeResearcherWorkspace(token, workspaceData);
-        if (user.role === "police") initializePoliceOtpPreview();
+        if (user.role === "police") initializePoliceOtpWorkspace(token);
     } catch (error) {
         if (error.status === 401 || error.status === 403) {
             clearSession();
