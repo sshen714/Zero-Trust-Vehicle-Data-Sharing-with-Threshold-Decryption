@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>警方工作區｜零信任車輛資料分享</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="app.js" defer></script>
+</head>
+<body data-role="police">
+    <main class="dashboard">
+        <h1>零信任車輛資料分享</h1>
+        <section id="profile" hidden aria-label="目前使用者">
+            <p class="account-row"><span>帳號</span><strong id="current-username"></strong></p>
+            <p class="account-row"><span>角色</span><strong id="current-role"></strong></p>
+            <button id="logout" type="button">登出</button>
+        </section>
+        <section id="workspace" hidden aria-label="警方工作區">
+            <h2>警方工作區</h2>
+            <p>肇逃、事故案件調查</p>
+            <p class="preview-notice">介面展示：以下內容與操作尚未連接後端資料查詢或 OTP 服務。</p>
+            <ul class="access-list"><li>依車牌與時間查詢</li><li>時間精準，位置與速度預設模糊</li><li>Email OTP 驗證後解鎖授權欄位</li></ul>
+            
+            <div class="role-grid">
+<section class="feature-card">
+<h3>資料查詢</h3>
+<p>填寫車牌與時間條件。</p>
+<label for="police-0-1">車牌</label>
+<input id="police-0-1" type="text" placeholder="請輸入車牌">
+<label for="police-0-2">開始時間</label>
+<input id="police-0-2" type="datetime-local">
+<label for="police-0-3">結束時間</label>
+<input id="police-0-3" type="datetime-local">
+<div class="preview-actions"><button type="button" data-preview>下載模糊位置 CSV</button>
+<button type="button" data-preview>下載模糊速度 CSV</button></div>
+
+</section>
+<section class="feature-card">
+<h3>OTP 申請</h3>
+<p>精準位置與精準速度分別申請 Email OTP。</p>
+<p>車牌必填，並選擇完整的開始與結束時間。</p>
+<form id="police-otp-form">
+<label for="police-otp-plate">車牌</label>
+<input id="police-otp-plate" name="plate" type="text" maxlength="32" autocomplete="off" placeholder="例如 V00000">
+<p id="police-otp-available-range">正在載入可申請時間…</p>
+<label for="police-otp-start">開始時間</label>
+<input id="police-otp-start" name="start" type="datetime-local" step="1">
+<label for="police-otp-end">結束時間</label>
+<input id="police-otp-end" name="end" type="datetime-local" step="1">
+<div id="police-otp-request-actions" class="preview-actions">
+<button type="submit" name="data_type" value="location">送出申請精準位置</button>
+<button type="submit" name="data_type" value="speed">送出申請精準速度</button>
+</div>
+</form>
+<div id="police-otp-entry" class="otp-entry" hidden>
+<label id="police-otp-label" for="police-otp-code">Email OTP</label>
+<input id="police-otp-code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" placeholder="請輸入 6 位數 Email OTP">
+<button id="police-otp-submit" type="button">送出 OTP</button>
+</div>
+<p id="police-otp-message" role="status" aria-live="polite"></p>
+
+</section>
+            </div>
+        </section>
+        <p id="message" role="status" aria-live="polite">正在驗證登入身份…</p>
+        <noscript>請啟用 JavaScript 以驗證登入身份。</noscript>
+    </main>
+</body>
+</html>

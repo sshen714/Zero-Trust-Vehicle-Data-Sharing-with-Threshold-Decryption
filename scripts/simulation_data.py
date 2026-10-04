@@ -90,7 +90,20 @@ def generate_raw(n_veh, n_days, rng, block=250, n=17, dt=5):
     return df, hospital_xy
 
 
-def save_raw_database(df, table_name="raw_trajectories"):
+def prepare_trajectory_dataframe(df):
+    """Convert simulator coordinates and seconds into the encryption input schema."""
+    lat, lng = to_ll(df.x.values, df.y.values)
+    return pd.DataFrame({
+        "vehicle_id": df.vehicle_id.values,
+        "timestamp": BASE_DATE + pd.to_timedelta(df.t.values, unit="s"),
+        "lat": np.round(lat, 6),
+        "lng": np.round(lng, 6),
+        "speed_kmh": np.round(df.speed_kmh.values, 1),
+    })
+
+
+def save_encrypted_database(df):
+    """Encrypt simulated trajectories and append them to the protected table."""
     import sys
     from pathlib import Path
 
@@ -101,42 +114,54 @@ def save_raw_database(df, table_name="raw_trajectories"):
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
 
-    # 直接使用 database.py 已經建立好的 engine
     from backend.database import engine
-    from sqlalchemy import MetaData
-    from backend.models import RawTrajectory
-
-    # 將模擬的 x / y 座標轉成經緯度
-    lat, lng = to_ll(
-        df.x.values,
-        df.y.values
+    from backend.models import EncryptedTrajectory, Vehicle
+    from scripts.encryption import (
+        encrypt_dataframe,
+        make_internal_vehicle_id,
+        make_plate_lookup,
     )
+    from sqlalchemy import delete, insert, select
 
-    # 整理成準備寫入資料庫的格式
-    out = pd.DataFrame({
-        "vehicle_id": df.vehicle_id.values,
-        "timestamp": BASE_DATE + pd.to_timedelta(
-            df.t.values,
-            unit="s"
-        ),
-        "lat": np.round(lat, 6),
-        "lng": np.round(lng, 6),
-        "speed_kmh": np.round(
-            df.speed_kmh.values,
-            1
-        ),
-    })
+    plain = prepare_trajectory_dataframe(df)
+    encrypted = encrypt_dataframe(plain)
+    source_vehicle_ids = sorted(set(plain["vehicle_id"].astype(str)))
+    vehicle_records = []
+    for source_vehicle_id in source_vehicle_ids:
+        plate_lookup = make_plate_lookup(source_vehicle_id)
+        vehicle_records.append({
+            "vehicle_id": make_internal_vehicle_id(plate_lookup),
+            "plate_lookup": plate_lookup,
+        })
 
-    # 如果 table 不存在，就建立
     with engine.begin() as conn:
-        table = RawTrajectory.__table__
-        if table_name != table.name:
-            table = table.to_metadata(MetaData(), name=table_name)
-        table.create(bind=conn, checkfirst=True)
+        Vehicle.__table__.create(bind=conn, checkfirst=True)
+        EncryptedTrajectory.__table__.create(bind=conn, checkfirst=True)
 
-        # 持續新增資料，不刪除原本內容
-        out.to_sql(
-            name=table_name,
+        lookup_values = [record["plate_lookup"] for record in vehicle_records]
+        existing = set(conn.scalars(
+            select(Vehicle.plate_lookup).where(
+                Vehicle.plate_lookup.in_(lookup_values)
+            )
+        ))
+        new_vehicles = [
+            record for record in vehicle_records
+            if record["plate_lookup"] not in existing
+        ]
+        if new_vehicles:
+            conn.execute(insert(Vehicle), new_vehicles)
+
+        # The simulator produces a complete fixed demo data set. Replace older
+        # runs for these vehicles so rerunning the script cannot duplicate every
+        # timestamp in encrypted_trajectories.
+        conn.execute(
+            delete(EncryptedTrajectory).where(
+                EncryptedTrajectory.plate_lookup.in_(lookup_values)
+            )
+        )
+
+        encrypted.to_sql(
+            name=EncryptedTrajectory.__tablename__,
             con=conn,
             if_exists="append",
             index=False,
@@ -145,7 +170,8 @@ def save_raw_database(df, table_name="raw_trajectories"):
         )
 
     print(
-        f"成功寫入 {len(out)} 筆資料到 MySQL：{table_name}"
+        f"成功寫入 {len(encrypted)} 筆加密資料到 MySQL："
+        f"{EncryptedTrajectory.__tablename__}"
     )
 
 if __name__ == "__main__":
@@ -158,9 +184,9 @@ if __name__ == "__main__":
         rng=rng,
     )
 
-    save_raw_database(raw, table_name="raw_trajectories")
+    save_encrypted_database(raw)
 
     print(raw.head())
     print(f"共產生 {len(raw)} 筆紀錄")
     print(f"醫院座標：{hospital_xy}")
-    print("已儲存 raw_trajectories.csv")
+    print("模擬資料已加密並寫入資料庫")

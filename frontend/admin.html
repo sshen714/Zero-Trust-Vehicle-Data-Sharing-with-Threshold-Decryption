@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>系統管理者工作區｜零信任車輛資料分享</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="app.js" defer></script>
+</head>
+<body data-role="admin">
+    <main class="dashboard">
+        <h1>零信任車輛資料分享</h1>
+        <section id="profile" hidden aria-label="目前使用者">
+            <p class="account-row"><span>帳號</span><strong id="current-username"></strong></p>
+            <p class="account-row"><span>角色</span><strong id="current-role"></strong></p>
+            <button id="logout" type="button">登出</button>
+        </section>
+        <section id="workspace" hidden aria-label="系統管理者工作區">
+            <h2>系統管理者工作區</h2>
+            <p>維護帳號、網站與資料查詢</p>
+            <ul class="access-list"><li>可依車牌、時間、位置與速度查詢</li><li>位置與速度預設模糊</li><li>A OTP 解鎖位置；B OTP 解鎖速度</li></ul>
+            <div class="metric-grid"><div class="metric-card"><span>網站狀態</span>
+<div class="metric-details" id="admin-site-status">
+<span>會員數：<strong id="admin-member-count">—</strong></span>
+<span>車輛數：<strong id="admin-vehicle-count">—</strong></span>
+<span>身分數：<strong id="admin-role-count">—</strong></span>
+</div>
+<small id="admin-site-status-note">正在載入資料…</small></div></div>
+            <div class="role-grid">
+<section class="feature-card">
+<h3>帳號管理</h3>
+<p>輸入帳號（username），查看身分與 email。</p>
+<form id="admin-account-form">
+<label for="admin-0-0">帳號</label>
+<input id="admin-0-0" name="username" type="text" maxlength="50" autocomplete="off" placeholder="請輸入帳號" required>
+<div class="preview-actions"><button id="admin-account-submit" type="submit">查看帳號</button></div>
+</form>
+<div id="admin-account-result" hidden>
+<p class="account-row"><span>帳號</span><strong id="admin-account-username"></strong></p>
+<p class="account-row"><span>身分</span><strong id="admin-account-role"></strong></p>
+<p class="account-row"><span>Email</span><strong id="admin-account-email"></strong></p>
+</div>
+<p id="admin-account-message" role="status" aria-live="polite"></p>
+</section>
+<section class="feature-card">
+<h3>資料查詢</h3>
+<p>依條件查看資料。</p>
+<p>車牌必填；可另加速度範圍，速度下限與上限必須一起填寫。查無資料時不提供下載。</p>
+<div class="input-pair">
+<div><label for="admin-min-speed">速度下限（km/h）</label><input id="admin-min-speed" type="number" min="0" max="300" step="0.1" placeholder="例如 20"></div>
+<div><label for="admin-max-speed">速度上限（km/h）</label><input id="admin-max-speed" type="number" min="0" max="300" step="0.1" placeholder="例如 60"></div>
+</div>
+<label for="admin-query-plate">車牌</label>
+<input id="admin-query-plate" type="text" maxlength="32" autocomplete="off" placeholder="例如 V00000">
+<p id="admin-available-range">正在載入可查詢時間…</p>
+<label for="admin-query-start">開始時間</label>
+<input id="admin-query-start" type="datetime-local" step="1">
+<label for="admin-query-end">結束時間</label>
+<input id="admin-query-end" type="datetime-local" step="1">
+<div class="preview-actions"><button id="admin-query-download" type="button">查詢資料</button></div>
+
+</section>
+<section class="feature-card">
+<h3>OTP 申請</h3>
+<p>精準位置由主管 A OTP 解鎖，精準速度由主管 B OTP 解鎖。</p>
+<p>車牌必填；選擇時間時，開始與結束時間必須一起填寫。</p>
+<p>清空兩個時間時使用該車完整資料時間。查無資料時不提供申請或下載。</p>
+<form id="admin-otp-form">
+<label for="admin-otp-plate">車牌</label>
+<input id="admin-otp-plate" name="plate" type="text" maxlength="32" autocomplete="off" placeholder="例如 V00000">
+<p id="admin-otp-available-range">正在載入可申請時間…</p>
+<label for="admin-otp-start">開始時間</label>
+<input id="admin-otp-start" name="start" type="datetime-local" step="1">
+<label for="admin-otp-end">結束時間</label>
+<input id="admin-otp-end" name="end" type="datetime-local" step="1">
+<div class="preview-actions">
+<button id="admin-otp-location-submit" type="submit" name="data_type" value="location">送出申請精準位置</button>
+<button id="admin-otp-speed-submit" type="submit" name="data_type" value="speed">送出申請精準速度</button>
+</div>
+</form>
+<div id="admin-otp-entry" class="otp-entry" hidden>
+<label id="admin-otp-label" for="admin-otp-code">OTP</label>
+<input id="admin-otp-code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" placeholder="請輸入 6 位數 OTP">
+<button id="admin-otp-verify" type="button">送出 OTP</button>
+</div>
+<p id="admin-otp-message" role="status" aria-live="polite"></p>
+</section>
+            </div>
+        </section>
+        <p id="message" role="status" aria-live="polite">正在驗證登入身份…</p>
+        <noscript>請啟用 JavaScript 以驗證登入身份。</noscript>
+    </main>
+</body>
+</html>

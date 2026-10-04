@@ -142,7 +142,7 @@ python scripts/create_table.py
 ```
 
 建表入口統一放在 `scripts/create_table.py`，使用 `backend/.env` 的資料庫設定。
-四張資料表的結構統一定義在 `backend/models.py`，建表腳本只負責執行建立。
+六張資料表的結構統一定義在 `backend/models.py`，建表腳本只負責執行建立。
 腳本可重複執行，不會刪除資料，也不會變更既有欄位；欄位變更仍需 migration。
 
 在專案根目錄執行：
@@ -169,7 +169,7 @@ source .venv/bin/activate
 python scripts/simulation_data.py
 ```
 
-模擬程式透過 `backend/database.py` 使用 `DB_NAME` 指定的資料庫，並將資料寫入 `raw_trajectories` 資料表。
+模擬程式先將車輛識別碼、位置與速度加密，再透過 `backend/database.py` 使用 `DB_NAME` 指定的資料庫，將結果寫入 `encrypted_trajectories`。`vehicles` 只保存不透明內部 ID 與 HMAC 查詢碼，不保存解密後的車牌。
 
 可進入 MySQL 確認資料：
 
@@ -180,8 +180,8 @@ sudo mysql
 ```sql
 USE vehicle_data_sharing;
 SHOW TABLES;
-SELECT * FROM raw_trajectories LIMIT 10;
-SELECT COUNT(*) FROM raw_trajectories;
+SELECT id, plate_lookup, timestamp FROM encrypted_trajectories LIMIT 10;
+SELECT COUNT(*) FROM encrypted_trajectories;
 ```
 
 ## 6. 啟動前端
@@ -198,49 +198,88 @@ python3 -m http.server 5500 --bind 127.0.0.1 --directory frontend
 http://127.0.0.1:5500/login.html
 ```
 
-登入成功後會進入 `index.html` 個人資料頁。該頁會向 `GET /auth/me` 驗證 JWT，並顯示後端回傳的帳號與角色；登出會清除本分頁的登入憑證。
+登入成功後進入 `index.html` 導向頁，由 `GET /auth/me` 驗證 JWT 與身份後前往各自的 HTML 工作區。每個工作區也會驗證身份，身份不符時導向自己的頁面；登出會清除本分頁的登入憑證。
+
+### Windows 瀏覽器存取 VirtualBox 中的服務
+
+上面的 `127.0.0.1` 啟動方式適用於瀏覽器與服務位於同一台機器的情況。若服務在 Linux 虛擬機、瀏覽器在 Windows 主機，請在虛擬機的兩個終端機分別執行：
+
+```bash
+.venv/bin/python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+```bash
+.venv/bin/python -m http.server 5500 --bind 0.0.0.0 --directory frontend
+```
+
+使用 VirtualBox NAT 網路時，在虛擬機的「設定 → 網路 → NAT 介面 → 進階 → 連接埠轉送」建立兩條 TCP 規則：
+
+| 用途 | 主機 IP | 主機連接埠 | 客體 IP | 客體連接埠 |
+| --- | --- | --- | --- | --- |
+| 前端 | `127.0.0.1` | `5500` | 留空（預設 NAT 客體） | `5500` |
+| 後端 | `127.0.0.1` | `8000` | 留空（預設 NAT 客體） | `8000` |
+
+接著在 Windows 瀏覽器開啟 `http://127.0.0.1:5500/login.html`。前端的 `API_BASE` 使用 `http://127.0.0.1:8000`，所以兩個連接埠都必須轉送，且主機連接埠需使用表中的值。`0.0.0.0` 是服務監聽位址，瀏覽器仍使用主機的 `127.0.0.1`。
+
+若無法連線，先確認兩個服務終端機仍在執行，再確認轉送規則。頁面缺少樣式或停在「等待 JavaScript 載入」時，在 Windows 瀏覽器直接開啟 `http://127.0.0.1:5500/style.css` 和 `http://127.0.0.1:5500/app.js`，確認可取得檔案，並按 `Ctrl + Shift + R` 強制重新整理。若頁面可開啟但登入或查詢無法連線，另開 `http://127.0.0.1:8000/docs` 檢查後端。
 
 ## 專案資料流
 
 ```text
 scripts/simulation_data.py
         ↓
+scripts/encryption.py
+        ↓
 backend/database.py
         ↓
 MySQL
         ↓
-vehicle_data_sharing.raw_trajectories
+vehicle_data_sharing.encrypted_trajectories
 ```
 
-## 7. 八種身份與測試帳號
+## 7. 公開訪客與七種登入身份
 
-目前本機已建立八種身份的測試帳號。帳號及密碼不隨 Git 提交，其他開發者 clone 專案後不會自動取得這些帳號。建立與驗證腳本已移除，`scripts/create_table.py` 只負責建表，不建立帳號。
+訪客不需要帳號或密碼，可從登入頁的「訪客」入口查看公開平均速度。其他身份使用本機測試帳號；帳號及密碼不隨 Git 提交，其他開發者 clone 專案後不會自動取得這些帳號。建立與驗證腳本已移除，`scripts/create_table.py` 只負責建表，不建立帳號。
 
 密碼已隨機產生，儲存在專案根目錄的 `.demo-accounts.json`（僅本機使用，已被 Git 忽略）。每個帳號均使用自己的密碼；登入時填 username。
 
-| 身份 | 測試帳號 | 登入後可取得的資料／功能 |
+公開訪客頁位於 `frontend/visitor.html`；登入身份的介面分別位於 `frontend/owner.html`、`vendor.html`、`supervisor_a.html`、`supervisor_b.html`、`admin.html`、`researcher.html`、`police.html`。`index.html` 只負責登入後導頁，`app.js` 處理公開訪客查詢與登入身份驗證。
+
+登入身份呼叫 `/auth/login` 與 `/auth/me` 驗證身份，角色頁會呼叫 `/workspace` 載入工作區基本資料。公開訪客頁不建立 session，只呼叫公開的時間範圍與平均速度 API。
+
+| 身份 | 測試帳號 | 目前展示的畫面 |
 | --- | --- | --- |
-| 車主 | `demo_owner` | 顯示尚未設定車輛對應的提示；個別軌跡查詢尚未實作 |
-| 訪客 | `demo_visitor` | 全體交通紀錄數、平均速度、低速紀錄數，不含個別位置 |
-| 合作廠商 | `demo_vendor` | 自己的申請；兩位主管核准後查看交通統計與每日分析 |
-| 主管 A | `demo_supervisor_a` | 查看申請與使用目的，記錄主管 A 的核准／拒絕 |
-| 主管 B | `demo_supervisor_b` | 查看申請，獨立記錄主管 B 的核准／拒絕 |
-| 系統管理者 | `demo_admin` | 帳號清單及服務筆數統計 |
-| 交通研究者 | `demo_researcher` | 可登入，顯示資料查詢功能尚未實作，不提供車輛或管理資料 |
-| 警方 | `demo_police` | 可登入，顯示資料查詢功能尚未實作，不提供車輛或管理資料 |
+| 車主 | `demo_owner` | 輸入本人綁定車牌與選填時間，下載模糊位置或模糊速度 CSV |
+| 訪客 | 不需帳號 | 選擇時間後只顯示所有車輛的整體平均速度 |
+| 合作廠商 | `demo_vendor` | 依車牌與時間下載模糊位置或精準速度 CSV；左側申請流程尚未串接 |
+| 主管 A | `demo_supervisor_a` | 依車牌與時間下載精準位置 CSV；左側精準速度申請尚未串接 |
+| 主管 B | `demo_supervisor_b` | 速度查詢、主管 A OTP 申請與驗證入口（精準位置） |
+| 系統管理者 | `demo_admin` | 帳號管理、服務與日誌、資料查詢及 OTP 入口 |
+| 交通研究者 | `demo_researcher` | 依時間查詢研究資料，不顯示車牌查詢欄位 |
+| 警方 | `demo_police` | 依車牌與時間查詢，以及 Email OTP 申請與驗證入口 |
 
-操作順序：
+操作方式：開啟 `http://127.0.0.1:5500/login.html`；訪客直接點選「訪客」，其他身份輸入測試帳號。車主可下載本人綁定車輛的模糊位置或速度 CSV；公開訪客只能查詢整體平均速度，沒有下載功能。
 
-1. 開啟 `http://127.0.0.1:5500/login.html`，使用車主帳號查看尚未設定車輛對應的提示。
-2. 登出後使用訪客帳號，確認畫面只提供交通概況。
-3. 使用廠商帳號填寫至少 10 字的資料使用目的並送出申請。
-4. 依序登入主管 A、主管 B，分別核准同一筆申請。每個主管只能記錄自己的審核結果，已記錄的結果不能覆寫。
-5. 回到廠商帳號重新整理。兩位都核准才會顯示每日交通分析；任一拒絕則該申請不授權。
-6. 使用管理者帳號查看帳號清單及服務統計。
-7. 分別使用交通研究者、警方帳號登入，確認顯示資料查詢功能尚未實作的提示。
+後端每次受保護請求都重新查詢帳號角色及啟用狀態。訪客不建立帳號，公開註冊 API 已移除。
 
-後端每次請求都重新查詢帳號角色及啟用狀態。公開註冊仍固定建立訪客，不能由前端指定主管或管理者角色。
+此版本使用三把獨立的 AES-256-GCM 金鑰分欄保護車牌、位置與速度。授權設計不採用門檻解密或主管 A、B 共同重建金鑰：主管 A 負責精準位置的授權，主管 B 負責精準速度的授權，兩種資料各自驗證，不要求兩位主管同時同意。警方可依車牌與時間分別申請精準位置或精準速度 Demo OTP，驗證後下載對應 CSV；目前原始 OTP 仍由 API 回傳，尚未寄送 Email。資料筆數少時，彙總值仍不等同匿名化保證。
 
-此版本為角色權限與雙人審核的第一階段：分析授權是帳號層級、無到期時間，只提供去除個別車輛識別的交通統計；車主軌跡查詢、研究者與警方查詢、時間區間篩選、位置／速度模糊化、Email OTP、事故分析、正式的授權範圍／撤銷流程、門檻解密及網站維護操作尚未實作。資料筆數少時，彙總值仍不等同匿名化保證。
+交通統計及每日分析使用 `encrypted_trajectories`，後端只在記憶體中解密計算所需欄位。車主使用 `GET /workspace/trajectories` 輸入車牌；後端計算 `plate_lookup`、檢查 `vehicle_ownerships`，再查詢加密軌跡。時間條件可省略，若提供則包含起訖端點且不帶時區。位置 CSV 會在記憶體副本中切分行程，每趟首尾至少移除 200～500 公尺及 1 分鐘；每趟行程的經緯度分別使用由伺服器密鑰穩定產生、介於 `±0.0005°` 的固定偏移，使近似軌跡保留相對移動且不公開上下限。時間篩選在 PETs 處理後才套用。速度 CSV 採 10 km/h 區間（不含上限）。處理過程不會回寫或修改 `encrypted_trajectories`。資料申請使用 `data_requests`，OTP 驗證狀態使用只保存雜湊的 `otp_challenges`。六張資料表統一定義於 `backend/models.py`，由 `scripts/create_table.py` 建立。
 
-交通統計及每日分析使用既有的模擬資料表 `raw_trajectories`。`vehicle_ownerships` 已定義為車主與車輛的對應表，但工作區尚未使用此表查詢軌跡。資料申請使用 `data_requests`。四張資料表（含 `users`）統一定義於 `backend/models.py`，由 `scripts/create_table.py` 建立。
+合作廠商使用 `GET /workspace/vendor/trajectories` 依車牌與必填時間範圍下載資料。位置 CSV 套用與車主分離的固定 PETs 偏移並去除行程首尾；速度 CSV 回傳解密後的精準速度。兩種 CSV 都不包含車牌、`plate_lookup` 或密文。目前只完成右側查詢下載，尚未強制連結左側申請與主管核准。
+
+合作廠商左側已提供 OTP 模擬：建立位置申請時產生六位數 OTP，資料庫只暫存同時綁定車牌與時間範圍的 HMAC-SHA256 雜湊、五分鐘期限與錯誤次數。驗證成功會立即下載核准條件的精準位置 CSV 並刪除 OTP 紀錄；過期或達到錯誤上限的 OTP 也會在存取時清除。Demo 期間 API 會回傳原始 OTP 供本機輸入測試，目前尚未寄送 Email。
+
+主管 A 使用 `GET /workspace/supervisor-a/locations` 依車牌與必填時間範圍下載精準位置 CSV。端點只允許 `supervisor_a`，並且只解密位置；CSV 不包含車牌、`plate_lookup`、速度或密文。
+
+主管 A 左側已提供精準速度 OTP 模擬。OTP 雜湊綁定車牌與時間範圍，五分鐘內最多嘗試五次；驗證成功後立即下載精準速度 CSV 並刪除 OTP 紀錄，過期或達到錯誤上限時也會在存取時清除。Demo 期間 API 會回傳原始 OTP 供本機測試，目前尚未寄送 Email。
+
+主管 B 使用 `GET /workspace/supervisor-b/speeds` 依車牌與必填時間範圍下載精準速度 CSV。端點只允許 `supervisor_b`，並且只解密速度；CSV 不包含車牌、`plate_lookup`、位置或密文。
+
+主管 B 左側已提供精準位置 OTP 模擬。OTP 雜湊綁定車牌與時間範圍，五分鐘內最多嘗試五次；驗證成功後立即下載精準位置 CSV 並刪除 OTP 紀錄，過期或達到錯誤上限時也會在存取時清除。Demo 期間 API 會回傳原始 OTP 供本機測試，目前尚未寄送 Email。
+
+系統管理者使用 `GET /workspace/admin/trajectories` 依必填時間與車牌篩選資料，可另加完整速度範圍。後端解密後套用速度條件，再輸出已去除行程首尾的模糊位置與 10 km/h 速度區間 CSV；CSV 不包含車牌、`plate_lookup`、精準位置、精準速度或密文。
+
+系統管理者的 OTP 申請可選精準位置或精準速度，車牌必填，時間範圍選填。未填時間時使用該車目前完整資料時間；查不到可下載資料時回傳錯誤，不產生空 CSV。Demo OTP 綁定資料類型及申請範圍，五分鐘有效、最多錯誤五次，驗證成功即下載對應精準 CSV 並刪除 OTP 紀錄。此版本仍由 API 回傳 Demo OTP，尚未寄送 Email 或串接主管核准。
+
+交通研究者使用 `GET /workspace/researcher/trajectories` 依必填時間範圍下載研究 CSV。後端先對完整資料套用 `apply_researcher_pets()`，包含行程首尾去除、假名與靜默期、位置偏移、降低頻率、`coarsen_time()` 時間粗化及速度取整，再依時間範圍輸出；不提供車牌查詢或精準欄位。

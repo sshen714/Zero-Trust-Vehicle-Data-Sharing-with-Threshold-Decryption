@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>合作廠商工作區｜零信任車輛資料分享</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="app.js" defer></script>
+</head>
+<body data-role="vendor">
+    <main class="dashboard">
+        <h1>零信任車輛資料分享</h1>
+        <section id="profile" hidden aria-label="目前使用者">
+            <p class="account-row"><span>帳號</span><strong id="current-username"></strong></p>
+            <p class="account-row"><span>角色</span><strong id="current-role"></strong></p>
+            <button id="logout" type="button">登出</button>
+        </section>
+        <section id="workspace" hidden aria-label="合作廠商工作區">
+            <h2>合作廠商工作區</h2>
+            <p>分析核准範圍內的車輛或事故資料</p>
+            <p class="preview-notice">介面展示：以下內容與操作尚未連接資料查詢、申請、審核或 OTP 服務。</p>
+            <ul class="access-list"><li>依核准車輛與時間範圍查詢</li><li>時間與速度精準</li><li>位置預設模糊；主管 A OTP 解鎖</li></ul>
+            
+            <div class="role-grid">
+<section class="feature-card">
+<h3>資料使用申請</h3>
+<p>說明使用目的及所需的車輛、時間範圍。</p>
+<label for="vendor-0-0">使用目的</label>
+<input id="vendor-0-0" type="text" placeholder="請輸入使用目的">
+<label for="vendor-0-1">車輛</label>
+<input id="vendor-0-1" type="text" placeholder="請輸入車輛">
+<p id="vendor-request-available-range">正在載入可申請時間…</p>
+<label for="vendor-0-2">開始時間</label>
+<input id="vendor-0-2" type="datetime-local" step="1">
+<label for="vendor-0-3">結束時間</label>
+<input id="vendor-0-3" type="datetime-local" step="1">
+<div class="preview-actions"><button id="vendor-request-submit" type="button">送出申請</button></div>
+<div id="vendor-otp-entry" class="otp-entry" hidden>
+<input id="vendor-otp-code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" aria-label="Email OTP" placeholder="請輸入 6 位數 OTP">
+<button id="vendor-otp-submit" type="button">送出 OTP</button>
+</div>
+
+</section>
+<section class="feature-card">
+<h3>核准資料分析</h3>
+<p>查看核准範圍內的資料，並申請精準位置。</p>
+<p id="vendor-available-range">正在載入可查詢時間…</p>
+<label for="vendor-plate">車牌</label>
+<input id="vendor-plate" type="text" maxlength="32" autocomplete="off" placeholder="例如 V00000">
+<label for="vendor-start">開始時間</label>
+<input id="vendor-start" type="datetime-local" step="1">
+<label for="vendor-end">結束時間</label>
+<input id="vendor-end" type="datetime-local" step="1">
+<div class="preview-actions">
+<button type="button" data-vendor-export="location">下載模糊位置 CSV</button>
+<button type="button" data-vendor-export="speed">下載精準速度 CSV</button>
+</div>
+
+</section>
+            </div>
+        </section>
+        <p id="message" role="status" aria-live="polite">正在驗證登入身份…</p>
+        <noscript>請啟用 JavaScript 以驗證登入身份。</noscript>
+    </main>
+</body>
+</html>

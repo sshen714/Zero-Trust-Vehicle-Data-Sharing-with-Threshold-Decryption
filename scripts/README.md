@@ -14,7 +14,7 @@ encryption.py
 MySQL
 ```
 
-`simulation_data.py` 先產生車輛模擬資料，再呼叫 `encryption.py` 將敏感欄位加密後寫入資料庫。
+`simulation_data.py` 先產生車輛模擬資料，再呼叫 `encryption.py` 將敏感欄位加密後寫入 `encrypted_trajectories`，不建立或寫入明文軌跡表。`vehicles` 只登記由 HMAC 查詢碼衍生的不透明內部 ID 與 `plate_lookup`，不保存解密後的車牌。
 
 ### 使用者查詢流程
 
@@ -44,7 +44,7 @@ pets.py
 - `lng`
 - `speed_kmh`
 
-模擬資料產生後，會先交由 `encryption.py` 處理，再寫入 MySQL。
+模擬產生的 raw data 只存在程式記憶體中，接著交由 `encryption.py` 處理；MySQL 只保存加密後的結果。每次可查詢的資料都來自 `simulation_data.py` 產生的模擬資料。模擬器每次寫入完整資料集時，會在同一個交易內取代這批車輛先前的加密軌跡，避免固定 timestamp 因重複執行而累積。
 
 資料庫目前主要儲存：
 
@@ -194,7 +194,7 @@ SQL 篩選必要資料
 
 ### 角色資料處理
 
-- `apply_owner_pets()`：車主使用，保留精準時間，位置與速度模糊化。
+- `apply_owner_pets()`：車主使用；保留精準時間，但每趟首尾至少移除 200～500 公尺及 1 分鐘；後端為每趟行程的經緯度各套用一個 `±0.0005°` 內的固定且不可預測偏移，速度則取整。
 - `apply_researcher_pets()`：交通研究者使用，套用完整 PETs，包括假名化、去頭尾、靜默期、位置偏移、降低頻率、時間粗化與速度取整。
 - `aggregate_traffic()`：訪客使用，不提供單車資料，只輸出車流量、平均速度與壅塞程度等聚合統計。
 

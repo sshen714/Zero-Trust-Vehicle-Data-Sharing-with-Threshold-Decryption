@@ -11,7 +11,7 @@ if str(ROOT) not in sys.path:
     
 from scripts.simulation_data import (
     generate_raw,
-    save_raw_database
+    save_encrypted_database
 )
 
 from scripts.decryption import (
@@ -41,10 +41,7 @@ def generate_vehicle_data():
         rng=rng
     )
 
-    save_raw_database(
-        raw,
-        table_name="encrypted_trajectories"
-    )
+    save_encrypted_database(raw)
 
     print(f"產生 {len(raw)} 筆資料")
     print(f"醫院座標：{hospital_xy}")

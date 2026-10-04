@@ -316,6 +316,7 @@ def trim_trip(
     df,
     min_distance=200,
     max_distance=500,
+    min_duration_seconds=0,
     lat_column="lat",
     lng_column="lng",
     trip_column="trip_id",
@@ -325,6 +326,7 @@ def trim_trip(
     每一趟行程：
         起點隨機剪掉 200~500 m
         終點隨機剪掉 200~500 m
+        可另外要求首尾至少剪掉指定秒數
     """
 
     if rng is None:
@@ -374,6 +376,14 @@ def trim_trip(
 
         total_distance = cumulative[-1]
 
+        timestamps = pd.to_datetime(trip["timestamp"])
+        elapsed_from_start = (
+            timestamps - timestamps.iloc[0]
+        ).dt.total_seconds().to_numpy()
+        elapsed_to_end = (
+            timestamps.iloc[-1] - timestamps
+        ).dt.total_seconds().to_numpy()
+
         keep = (
             (cumulative >= start_trim)
             &
@@ -381,6 +391,10 @@ def trim_trip(
                 cumulative
                 <= total_distance - end_trim
             )
+            &
+            (elapsed_from_start >= min_duration_seconds)
+            &
+            (elapsed_to_end >= min_duration_seconds)
         )
 
         trimmed = trip.loc[
@@ -586,22 +600,28 @@ def change_pseudonym(
 
 def apply_owner_pets(
     df,
-    location_eps=0.02,
     speed_step=5,
+    trim_min_distance=200,
+    trim_max_distance=500,
+    trim_min_duration_seconds=60,
     rng=None
 ):
     """
     Owner：
         時間精準
-        位置模糊
+        每趟行程依距離與時間去除首尾
         速度模糊
     """
 
-    result = df.copy()
+    if rng is None:
+        rng = np.random.default_rng()
 
-    result = blur_location(
+    result = split_trips(df)
+    result = trim_trip(
         result,
-        eps=location_eps,
+        min_distance=trim_min_distance,
+        max_distance=trim_max_distance,
+        min_duration_seconds=trim_min_duration_seconds,
         rng=rng
     )
 
@@ -609,6 +629,8 @@ def apply_owner_pets(
         result,
         step=speed_step
     )
+
+    result = result.drop(columns=["trip_id"], errors="ignore")
 
     return result
 

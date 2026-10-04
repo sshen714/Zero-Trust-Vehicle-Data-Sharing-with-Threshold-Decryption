@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>主管 B工作區｜零信任車輛資料分享</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="app.js" defer></script>
+</head>
+<body data-role="supervisor_b">
+    <main class="dashboard">
+        <h1>零信任車輛資料分享</h1>
+        <section id="profile" hidden aria-label="目前使用者">
+            <p class="account-row"><span>帳號</span><strong id="current-username"></strong></p>
+            <p class="account-row"><span>角色</span><strong id="current-role"></strong></p>
+            <button id="logout" type="button">登出</button>
+        </section>
+        <section id="workspace" hidden aria-label="主管 B工作區">
+            <h2>主管 B工作區</h2>
+            <p>查詢精準速度資料，並透過主管 A OTP 解鎖精準位置</p>
+            <ul class="access-list"><li>依車牌與時間查詢</li><li>時間與速度精準</li><li>位置預設模糊；主管 A OTP 解鎖</li></ul>
+            
+            <div class="role-grid">
+
+<section class="feature-card">
+<h3>精準位置使用申請</h3>
+<p>說明使用目的及所需的車輛、時間範圍，送出後輸入主管 A OTP 取得精準位置。</p>
+<label for="supervisor_b-0-0">使用目的</label>
+<input id="supervisor_b-0-0" type="text" placeholder="請輸入使用目的">
+<label for="supervisor_b-0-1">車輛</label>
+<input id="supervisor_b-0-1" type="text" placeholder="請輸入車輛">
+<p id="supervisor-b-request-available-range">正在載入可申請時間…</p>
+<label for="supervisor_b-0-2">開始時間</label>
+<input id="supervisor_b-0-2" type="datetime-local" step="1">
+<label for="supervisor_b-0-3">結束時間</label>
+<input id="supervisor_b-0-3" type="datetime-local" step="1">
+<div class="preview-actions"><button id="supervisor-b-request-submit" type="button">送出申請</button></div>
+<div id="supervisor-b-otp-entry" class="otp-entry" hidden>
+<input id="supervisor-b-otp-code" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" aria-label="Email OTP" placeholder="請輸入 6 位數 OTP">
+<button id="supervisor-b-otp-submit" type="button">送出 OTP</button>
+</div>
+</section>
+
+<section class="feature-card">
+<h3>速度資料查詢</h3>
+<p>依車牌及時間查看速度資料。</p>
+<p id="supervisor-b-available-range">正在載入可查詢時間…</p>
+<label for="supervisor-b-plate">車牌</label>
+<input id="supervisor-b-plate" type="text" maxlength="32" autocomplete="off" placeholder="例如 V00000">
+<label for="supervisor-b-start">開始時間</label>
+<input id="supervisor-b-start" type="datetime-local" step="1">
+<label for="supervisor-b-end">結束時間</label>
+<input id="supervisor-b-end" type="datetime-local" step="1">
+<div class="preview-actions"><button id="supervisor-b-download" type="button">查詢速度</button></div>
+
+</section>
+            </div>
+        </section>
+        <p id="message" role="status" aria-live="polite">正在驗證登入身份…</p>
+        <noscript>請啟用 JavaScript 以驗證登入身份。</noscript>
+    </main>
+</body>
+</html>
