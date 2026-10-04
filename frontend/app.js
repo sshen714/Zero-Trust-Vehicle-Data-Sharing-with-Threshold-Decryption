@@ -43,6 +43,40 @@ async function apiRequest(path, options = {}) {
 }
 
 
+function authenticatedRequest(path, token, options = {}) {
+    const headers = new Headers(options.headers);
+    headers.set("Authorization", `Bearer ${token}`);
+    return apiRequest(path, {...options, headers});
+}
+
+
+async function loadWorkspace(workspace, token, expectedRole) {
+    workspace.setAttribute("aria-busy", "true");
+    message.textContent = "身分驗證成功，正在載入工作區資料…";
+
+    try {
+        const data = await authenticatedRequest("/workspace", token);
+        if (
+            typeof data.role !== "string"
+            || typeof data.role_label !== "string"
+            || typeof data.task !== "string"
+            || data.role !== expectedRole
+        ) {
+            throw new Error("後端工作區資料格式不正確。");
+        }
+
+        workspace.dataset.loaded = "true";
+        workspace.dispatchEvent(new CustomEvent("workspace:loaded", {
+            detail: data,
+        }));
+        message.textContent = `後端工作區已連線：${data.role_label}－${data.task}`;
+        return data;
+    } finally {
+        workspace.removeAttribute("aria-busy");
+    }
+}
+
+
 function initializeLoginPage(form) {
     const button = form.querySelector("button");
     button.type = "submit";
@@ -106,9 +140,7 @@ async function initializeProfilePage(profile) {
 
     try {
         // Account and role come from /auth/me after backend validation.
-        const user = await apiRequest("/auth/me", {
-            headers: { Authorization: `Bearer ${token}` },
-        });
+        const user = await authenticatedRequest("/auth/me", token);
         if (typeof user.username !== "string" || typeof user.role !== "string") {
             throw new Error("後端使用者資料格式不正確。");
         }
@@ -121,13 +153,14 @@ async function initializeProfilePage(profile) {
         document.getElementById("current-username").textContent = user.username;
         document.getElementById("current-role").textContent = destination.label;
         profile.hidden = false;
-        document.getElementById('workspace').hidden = false;
+        const workspace = document.getElementById("workspace");
+        workspace.hidden = false;
         document.querySelectorAll('[data-preview]').forEach(button => {
             button.addEventListener('click', () => {
                 message.textContent = `「${button.textContent}」目前僅展示操作介面，未查詢或送出資料。`;
             });
         });
-        message.textContent = "登入身分已驗證；工作區目前為介面展示。";
+        await loadWorkspace(workspace, token, user.role);
     } catch (error) {
         if (error.status === 401 || error.status === 403) {
             clearSession();
