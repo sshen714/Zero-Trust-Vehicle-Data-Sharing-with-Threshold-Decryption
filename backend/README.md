@@ -63,6 +63,8 @@ police
 | `GET` | `/workspace/researcher/trajectories` | `researcher` | 依必填時間下載套用完整 PETs 的研究 CSV |
 | `POST` | `/workspace/vendor/location-requests` | `vendor` | 建立精準位置申請並在 Demo 模式產生 OTP |
 | `POST` | `/workspace/vendor/location-requests/{request_id}/verify-otp` | `vendor` | 驗證本人申請的單次 OTP 並下載精準位置 CSV |
+| `POST` | `/workspace/supervisor-a/speed-requests` | `supervisor_a` | 建立精準速度申請並在 Demo 模式產生 OTP |
+| `POST` | `/workspace/supervisor-a/speed-requests/{request_id}/verify-otp` | `supervisor_a` | 驗證本人申請的單次 OTP 並下載精準速度 CSV |
 | `POST` | `/workspace/requests/{request_id}/decision` | `supervisor_a`、`supervisor_b` | 記錄該主管的核准或拒絕決定 |
 
 `GET /workspace` 目前依角色回傳以下資料：

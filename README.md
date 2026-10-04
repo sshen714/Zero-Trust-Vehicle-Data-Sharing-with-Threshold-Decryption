@@ -247,7 +247,9 @@ vehicle_data_sharing.encrypted_trajectories
 
 合作廠商左側已提供 OTP 模擬：建立位置申請時產生六位數 OTP，資料庫只保存同時綁定車牌與時間範圍的 HMAC-SHA256 雜湊、五分鐘期限、錯誤次數與使用狀態。驗證成功會立即下載核准條件的精準位置 CSV。Demo 期間 API 會回傳原始 OTP 供本機輸入測試，目前尚未寄送 Email。
 
-主管 A 使用 `GET /workspace/supervisor-a/locations` 依車牌與必填時間範圍下載精準位置 CSV。端點只允許 `supervisor_a`，並且只解密位置；CSV 不包含車牌、`plate_lookup`、速度或密文。左側精準速度申請保留給後續 OTP 流程，目前尚未串接。
+主管 A 使用 `GET /workspace/supervisor-a/locations` 依車牌與必填時間範圍下載精準位置 CSV。端點只允許 `supervisor_a`，並且只解密位置；CSV 不包含車牌、`plate_lookup`、速度或密文。
+
+主管 A 左側已提供精準速度 OTP 模擬。OTP 雜湊綁定車牌與時間範圍，五分鐘內可嘗試五次且只能成功使用一次；驗證成功後立即下載精準速度 CSV。Demo 期間 API 會回傳原始 OTP 供本機測試，目前尚未寄送 Email。
 
 主管 B 使用 `GET /workspace/supervisor-b/speeds` 依車牌與必填時間範圍下載精準速度 CSV。端點只允許 `supervisor_b`，並且只解密速度；CSV 不包含車牌、`plate_lookup`、位置或密文。左側精準位置申請保留給後續 OTP 流程，目前尚未串接。
 
