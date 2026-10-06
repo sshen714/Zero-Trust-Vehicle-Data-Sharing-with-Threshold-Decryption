@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1030" viewBox="0 0 1200 1030" role="img" aria-labelledby="title desc">
+<title id="title">零信任車輛資料分享系統架構圖</title>
+<desc id="desc">瀏覽器透過靜態前端呼叫 FastAPI，經 JWT 與角色授權讀取 MySQL 密文，解密並依角色處理後回傳資料。模擬工具負責加密寫入，環境設定提供秘密值。</desc>
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8Z" fill="#526780"/></marker></defs>
+<style>text{font-family:"Noto Sans CJK TC","Microsoft JhengHei",sans-serif;fill:#18304b} .title{font-size:28px;font-weight:700}.label{font-size:19px;font-weight:700}.detail{font-size:15px}.edge{fill:none;stroke:#526780;stroke-width:2;marker-end:url(#arrow)}.note{font-size:15px;fill:#526780}</style>
+<rect width="1200" height="1030" fill="#f5f8fc"/>
+<text x="600" y="48" text-anchor="middle" class="title">零信任車輛資料分享 · 系統架構</text>
+<rect x="35" y="272" width="1130" height="505" rx="20" fill="#eaf1fa" stroke="#c8d7eb"/>
+<text x="60" y="303" class="label">FastAPI 後端 · 127.0.0.1:8000</text>
+<rect x="420" y="80" width="360" height="65" rx="12" fill="#fff" stroke="#a5bad2"/>
+<text x="600.0" y="109" text-anchor="middle" class="label">使用者瀏覽器</text>
+<rect x="390" y="180" width="420" height="75" rx="12" fill="#fff" stroke="#a5bad2"/>
+<text x="600.0" y="209" text-anchor="middle" class="label">靜態前端 · 127.0.0.1:5500</text>
+<text x="600.0" y="235" text-anchor="middle" class="detail">角色 HTML / app.js / style.css</text>
+<rect x="65" y="330" width="310" height="115" rx="12" fill="#fff" stroke="#a5bad2"/>
+<text x="220.0" y="359" text-anchor="middle" class="label">登入與帳號查詢</text>
+<text x="220.0" y="385" text-anchor="middle" class="detail">main.py / auth.py</text>
+<text x="220.0" y="408" text-anchor="middle" class="detail">bcrypt 密碼驗證、JWT 簽發</text>
+<rect x="445" y="330" width="310" height="115" rx="12" fill="#fff" stroke="#a5bad2"/>
+<text x="600.0" y="359" text-anchor="middle" class="label">身分與角色授權</text>
+<text x="600.0" y="385" text-anchor="middle" class="detail">dependencies.py</text>
+<text x="600.0" y="408" text-anchor="middle" class="detail">驗證 JWT、帳號狀態、角色</text>
+<rect x="825" y="330" width="310" height="115" rx="12" fill="#fff" stroke="#a5bad2"/>
+<text x="980.0" y="359" text-anchor="middle" class="label">公開訪客 API</text>
+<text x="980.0" y="385" text-anchor="middle" class="detail">/public/traffic-range</text>
+<text x="980.0" y="408" text-anchor="middle" class="detail">/public/average-speed · 不需登入</text>
+<rect x="445" y="485" width="310" height="115" rx="12" fill="#fff" stroke="#a5bad2"/>
+<text x="600.0" y="514" text-anchor="middle" class="label">角色工作區 API</text>
+<text x="600.0" y="540" text-anchor="middle" class="detail">workspace.py</text>
+<text x="600.0" y="563" text-anchor="middle" class="detail">車主綁定、資料篩選、Email OTP</text>
+<rect x="65" y="485" width="310" height="115" rx="12" fill="#fff" stroke="#a5bad2"/>
+<text x="220.0" y="514" text-anchor="middle" class="label">資料存取層</text>
+<text x="220.0" y="540" text-anchor="middle" class="detail">database.py / models.py</text>
+<text x="220.0" y="563" text-anchor="middle" class="detail">SQLAlchemy session 與 ORM</text>
+<rect x="825" y="485" width="310" height="115" rx="12" fill="#fff" stroke="#a5bad2"/>
+<text x="980.0" y="514" text-anchor="middle" class="label">選擇性解密</text>
+<text x="980.0" y="540" text-anchor="middle" class="detail">scripts/decryption.py</text>
+<text x="980.0" y="563" text-anchor="middle" class="detail">按需求解密位置或速度</text>
+<rect x="825" y="640" width="310" height="105" rx="12" fill="#fff" stroke="#a5bad2"/>
+<text x="980.0" y="669" text-anchor="middle" class="label">角色資料處理與回應</text>
+<text x="980.0" y="695" text-anchor="middle" class="detail">pets.py / workspace.py</text>
+<text x="980.0" y="718" text-anchor="middle" class="detail">隱私處理或精準 CSV、JSON 統計</text>
+<rect x="65" y="640" width="310" height="105" rx="12" fill="#fff6df" stroke="#a5bad2"/>
+<text x="220.0" y="669" text-anchor="middle" class="label">MySQL 資料庫</text>
+<text x="220.0" y="695" text-anchor="middle" class="detail">帳號、車輛、所有權、加密軌跡</text>
+<text x="220.0" y="718" text-anchor="middle" class="detail">申請狀態與 OTP 雜湊</text>
+<rect x="445" y="640" width="310" height="105" rx="12" fill="#f0eafd" stroke="#a5bad2"/>
+<text x="600.0" y="669" text-anchor="middle" class="label">本機環境設定 · .env</text>
+<text x="600.0" y="695" text-anchor="middle" class="detail">DB 設定、JWT_SECRET</text>
+<text x="600.0" y="718" text-anchor="middle" class="detail">PLATE / LOCATION / SPEED_KEY</text>
+<rect x="65" y="825" width="310" height="105" rx="12" fill="#fff" stroke="#a5bad2"/>
+<text x="220.0" y="854" text-anchor="middle" class="label">模擬資料產生</text>
+<text x="220.0" y="880" text-anchor="middle" class="detail">scripts/simulation_data.py</text>
+<text x="220.0" y="903" text-anchor="middle" class="detail">原始資料只在記憶體中</text>
+<rect x="445" y="825" width="310" height="105" rx="12" fill="#fff" stroke="#a5bad2"/>
+<text x="600.0" y="854" text-anchor="middle" class="label">分欄加密與查詢碼</text>
+<text x="600.0" y="880" text-anchor="middle" class="detail">scripts/encryption.py</text>
+<text x="600.0" y="903" text-anchor="middle" class="detail">AES-256-GCM / 車牌 HMAC</text>
+<path d="M600 145V180" class="edge"/>
+<path d="M440 255V285H220V330" class="edge"/>
+<path d="M600 255V330" class="edge"/>
+<path d="M760 255V285H980V330" class="edge"/>
+<path d="M600 445V485" class="edge"/>
+<path d="M220 445V485" class="edge"/>
+<path d="M445 542H375" class="edge"/>
+<path d="M220 600V640" class="edge"/>
+<path d="M755 542H825" class="edge"/>
+<path d="M980 445V485" class="edge"/>
+<path d="M980 600V640" class="edge"/>
+<path d="M1135 692H1180V217H810" class="edge"/>
+<text x="1157" y="620" transform="rotate(-90 1157 620)" class="note">回傳 JSON / CSV</text>
+<path d="M375 877H445" class="edge"/>
+<path d="M600 825V795H220V745" class="edge"/>
+<text x="410" y="789" class="note">加密寫入 MySQL</text>
+<path d="M600 640V615M445 692H375M600 745V825M755 692H785V575H825" fill="none" stroke="#8c70b2" stroke-width="2" stroke-dasharray="6 5"/>
+<text x="600" y="976" text-anchor="middle" class="note">實線：請求／資料流　　紫色虛線：設定與密鑰供應</text>
+<text x="600" y="1003" text-anchor="middle" class="note">Email OTP 由 Gmail API／SMTP 寄送；尚未串接主管核准或實作門檻解密。</text></svg>

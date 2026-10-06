@@ -304,3 +304,15 @@ SPEED_KEY
 backend/.env
 .env
 ```
+
+
+## authorize_gmail.py
+
+供後端寄件帳號完成一次性 Gmail OAuth 授權，僅請求 `gmail.send` 權限，不寄送測試郵件。從 `backend/gmail-credentials.json` 讀取用戶端資訊，成功後將授權存為 `backend/gmail-token.json`。兩份 JSON 均不提交 Git；使用者收取 OTP 不需要持有它們。
+
+```bash
+source .venv/bin/activate
+python scripts/authorize_gmail.py
+```
+
+瀏覽器與程式位於不同機器時，需將瀏覽器本機 8765 埠轉送到執行工具主機的 loopback。完整說明見 [根目錄 README](../README.md#10-email-otp-與團隊開發設定)。

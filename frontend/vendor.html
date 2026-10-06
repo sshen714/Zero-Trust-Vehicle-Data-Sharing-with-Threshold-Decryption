@@ -18,7 +18,7 @@
         <section id="workspace" hidden aria-label="合作廠商工作區">
             <h2>合作廠商工作區</h2>
             <p>分析核准範圍內的車輛或事故資料</p>
-            <p class="preview-notice">介面展示：以下內容與操作尚未連接資料查詢、申請、審核或 OTP 服務。</p>
+            <p class="preview-notice">OTP 驗證碼會寄至指定 Email，五分鐘內有效；資料申請尚未串接實際主管核准。</p>
             <ul class="access-list"><li>依核准車輛與時間範圍查詢</li><li>時間與速度精準</li><li>位置預設模糊；主管 A OTP 解鎖</li></ul>
             
             <div class="role-grid">
@@ -52,8 +52,8 @@
 <label for="vendor-end">結束時間</label>
 <input id="vendor-end" type="datetime-local" step="1">
 <div class="preview-actions">
-<button type="button" data-vendor-export="location">下載模糊位置 CSV</button>
-<button type="button" data-vendor-export="speed">下載精準速度 CSV</button>
+<button type="button" data-vendor-export="location">申請模糊位置下載 OTP</button>
+<button type="button" data-vendor-export="speed">申請精準速度下載 OTP</button>
 </div>
 
 </section>

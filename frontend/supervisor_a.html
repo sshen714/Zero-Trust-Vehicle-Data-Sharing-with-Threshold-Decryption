@@ -18,14 +18,14 @@
         <section id="workspace" hidden aria-label="主管 A工作區">
             <h2>主管 A工作區</h2>
             <p>查詢精準位置資料，並透過主管 B OTP 解鎖精準速度</p>
-            <p class="preview-notice">介面展示：以下內容與操作尚未連接資料查詢、申請、審核或 OTP 服務。</p>
+            <p class="preview-notice">OTP 驗證碼會寄至指定 Email，五分鐘內有效；資料申請尚未串接實際主管核准。</p>
             <ul class="access-list"><li>依車牌與時間查詢</li><li>時間與位置精準</li><li>速度預設模糊；主管 B OTP 解鎖</li></ul>
             
             <div class="role-grid">
 
 <section class="feature-card">
 <h3>精準速度使用申請</h3>
-<p>說明使用目的及所需的車輛、時間範圍，留待後續主管 B OTP 流程使用。</p>
+<p>說明使用目的及所需的車輛、時間範圍，透過 Email OTP 驗證後下載。</p>
 <label for="supervisor_a-0-0">使用目的</label>
 <input id="supervisor_a-0-0" type="text" placeholder="請輸入使用目的">
 <label for="supervisor_a-0-1">車輛</label>
@@ -52,7 +52,7 @@
 <input id="supervisor-a-start" type="datetime-local" step="1">
 <label for="supervisor-a-end">結束時間</label>
 <input id="supervisor-a-end" type="datetime-local" step="1">
-<div class="preview-actions"><button id="supervisor-a-download" type="button">查詢位置</button></div>
+<div class="preview-actions"><button id="supervisor-a-download" type="button">申請精準位置下載 OTP</button></div>
 
 </section>
             </div>

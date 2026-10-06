@@ -2,6 +2,7 @@
 import csv
 import hashlib
 import hmac
+import json
 import secrets
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_FLOOR
@@ -17,6 +18,7 @@ from scripts.decryption import decrypt_location, decrypt_speed
 from scripts.encryption import make_plate_lookup
 from scripts.pets import apply_owner_pets, apply_researcher_pets
 from .database import required_setting
+from .mailer import OtpDeliveryError, otp_recipient, send_download_otp
 from .dependencies import CurrentUser, DbSession, require_roles
 from .models import (
     DataRequest,
@@ -270,7 +272,6 @@ def researcher_pet_rng():
     return np.random.default_rng(int.from_bytes(seed_bytes[:8], 'big'))
 
 
-@router.get('/trajectories')
 def owner_trajectories(
     db: DbSession,
     user: Annotated[User, Depends(require_roles(Role.OWNER))],
@@ -345,6 +346,9 @@ def owner_trajectories(
         if end is not None and not protected.empty:
             protected = protected[protected['timestamp'] <= end]
 
+        if protected.empty:
+            raise HTTPException(404, 'No trajectories available')
+
         writer.writerow(['timestamp', 'approximate_latitude', 'approximate_longitude'])
         for row in protected.itertuples(index=False):
             writer.writerow([
@@ -371,7 +375,6 @@ def owner_trajectories(
     )
 
 
-@router.get('/vendor/trajectories')
 def vendor_trajectories(
     db: DbSession,
     user: Annotated[User, Depends(require_roles(Role.VENDOR))],
@@ -434,6 +437,8 @@ def vendor_trajectories(
                 (protected['timestamp'] >= start)
                 & (protected['timestamp'] <= end)
             ]
+        if protected.empty:
+            raise HTTPException(404, 'No trajectories available')
         writer.writerow(['timestamp', 'approximate_latitude', 'approximate_longitude'])
         for row in protected.itertuples(index=False):
             writer.writerow([
@@ -460,7 +465,6 @@ def vendor_trajectories(
     )
 
 
-@router.get('/supervisor-a/locations')
 def supervisor_a_locations(
     db: DbSession,
     user: Annotated[User, Depends(require_roles(Role.SUPERVISOR_A))],
@@ -512,7 +516,6 @@ def supervisor_a_locations(
     )
 
 
-@router.get('/supervisor-b/speeds')
 def supervisor_b_speeds(
     db: DbSession,
     user: Annotated[User, Depends(require_roles(Role.SUPERVISOR_B))],
@@ -562,7 +565,6 @@ def supervisor_b_speeds(
     )
 
 
-@router.get('/admin/trajectories')
 def admin_trajectories(
     db: DbSession,
     user: Annotated[User, Depends(require_roles(Role.ADMIN))],
@@ -769,6 +771,18 @@ class OtpVerificationInput(BaseModel):
     end: datetime
 
 
+def deliver_otp_and_commit(db, user, otp: str) -> str:
+    recipient = otp_recipient(user.role.value, user.email)
+    try:
+        db.flush()
+        send_download_otp(recipient, otp)
+    except OtpDeliveryError:
+        db.rollback()
+        raise HTTPException(503, '驗證碼寄送失敗，請稍後重新申請。') from None
+    db.commit()
+    return recipient
+
+
 def utc_now_naive() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -799,6 +813,208 @@ def otp_digest(
         f'{otp_kind}|{scope}'.encode('ascii'),
         hashlib.sha256,
     ).hexdigest()
+
+
+class PersonalDownloadRequestInput(BaseModel):
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    data_type: Literal['location', 'speed', 'trajectories']
+    plate: str = Field(min_length=1, max_length=32)
+    start: datetime
+    end: datetime
+    min_speed: float | None = Field(default=None, ge=0, le=300)
+    max_speed: float | None = Field(default=None, ge=0, le=300)
+
+
+class PersonalDownloadVerificationInput(PersonalDownloadRequestInput):
+    otp: str = Field(pattern=r'^\d{6}$')
+
+
+PERSONAL_DOWNLOAD_TYPES = {
+    Role.OWNER: {'location', 'speed'},
+    Role.VENDOR: {'location', 'speed'},
+    Role.SUPERVISOR_A: {'location'},
+    Role.SUPERVISOR_B: {'speed'},
+    Role.ADMIN: {'trajectories'},
+}
+
+
+def validate_personal_download_input(data, user):
+    if data.data_type not in PERSONAL_DOWNLOAD_TYPES.get(user.role, set()):
+        raise HTTPException(403, 'Download type is not available for this role')
+    if data.start.tzinfo is not None or data.end.tzinfo is not None:
+        raise HTTPException(422, 'Use local timestamps without a timezone offset')
+    if data.start > data.end:
+        raise HTTPException(422, 'Start must not be later than end')
+    has_min = data.min_speed is not None
+    has_max = data.max_speed is not None
+    if has_min != has_max:
+        raise HTTPException(422, 'Both minimum and maximum speed are required')
+    if user.role != Role.ADMIN and (has_min or has_max):
+        raise HTTPException(422, 'Speed range is only available to administrators')
+    if user.role == Role.ADMIN and has_min and data.min_speed > data.max_speed:
+        raise HTTPException(422, 'Minimum speed must not exceed maximum speed')
+
+
+def personal_download_digest(request_id, otp, user, data):
+    scope = json.dumps({
+        'request_id': request_id,
+        'otp': otp,
+        'user_id': user.id,
+        'email': user.email,
+        'role': user.role.value,
+        'data_type': data.data_type,
+        'plate_lookup': make_plate_lookup(data.plate),
+        'start': data.start.isoformat(),
+        'end': data.end.isoformat(),
+        'min_speed': data.min_speed,
+        'max_speed': data.max_speed,
+    }, sort_keys=True, separators=(',', ':'))
+    return hmac.new(
+        required_setting('JWT_SECRET').encode('utf-8'),
+        f'personal-download|{scope}'.encode('utf-8'),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def validate_personal_download_scope(db, user, data):
+    plate_lookup = make_plate_lookup(data.plate)
+    if user.role == Role.OWNER:
+        binding = db.scalar(
+            select(VehicleOwnership.id)
+            .join(Vehicle, Vehicle.vehicle_id == VehicleOwnership.vehicle_id)
+            .where(
+                VehicleOwnership.owner_id == user.id,
+                Vehicle.plate_lookup == plate_lookup,
+            )
+        )
+        if binding is None:
+            raise HTTPException(403, 'Vehicle is not bound to this account')
+    elif db.scalar(
+        select(Vehicle.vehicle_id).where(Vehicle.plate_lookup == plate_lookup)
+    ) is None:
+        raise HTTPException(404, 'Vehicle is not available')
+    if db.scalar(select(EncryptedTrajectory.id).where(
+        EncryptedTrajectory.plate_lookup == plate_lookup,
+        EncryptedTrajectory.timestamp >= data.start,
+        EncryptedTrajectory.timestamp <= data.end,
+    ).limit(1)) is None:
+        raise HTTPException(404, 'No trajectories available')
+
+
+def generate_personal_download(db, user, data):
+    if user.role == Role.OWNER:
+        return owner_trajectories(
+            db, user, data.plate, data.data_type, data.start, data.end,
+        )
+    if user.role == Role.VENDOR:
+        return vendor_trajectories(
+            db, user, data.plate, data.data_type, data.start, data.end,
+        )
+    if user.role == Role.SUPERVISOR_A:
+        return supervisor_a_locations(db, user, data.plate, data.start, data.end)
+    if user.role == Role.SUPERVISOR_B:
+        return supervisor_b_speeds(db, user, data.plate, data.start, data.end)
+    if user.role == Role.ADMIN:
+        return admin_trajectories(
+            db, user, data.start, data.end, data.plate,
+            data.min_speed, data.max_speed,
+        )
+    raise HTTPException(403, 'Personal download OTP is not available for this role')
+
+
+@router.post('/personal-download-requests', status_code=201)
+def submit_personal_download_request(
+    data: PersonalDownloadRequestInput,
+    db: DbSession,
+    user: Annotated[User, Depends(require_roles(
+        Role.OWNER, Role.VENDOR, Role.SUPERVISOR_A,
+        Role.SUPERVISOR_B, Role.ADMIN,
+    ))],
+    response: Response,
+):
+    validate_personal_download_input(data, user)
+    validate_personal_download_scope(db, user, data)
+    request_row = DataRequest(
+        vendor_id=user.id,
+        purpose=f'personal-download:{user.role.value}:{data.data_type}',
+        decision_a='not_required',
+        decision_b='not_required',
+    )
+    db.add(request_row)
+    db.flush()
+    otp = f'{secrets.randbelow(1_000_000):06d}'
+    now = utc_now_naive()
+    delete_expired_otp_challenges(db, now)
+    expires_at = now + timedelta(minutes=5)
+    db.add(OtpChallenge(
+        request_id=request_row.id,
+        otp_hash=personal_download_digest(request_row.id, otp, user, data),
+        expires_at=expires_at,
+    ))
+    recipient = deliver_otp_and_commit(db, user, otp)
+    response.headers['Cache-Control'] = 'no-store'
+    response.headers['Pragma'] = 'no-cache'
+    return {
+        'request_id': request_row.id,
+        'expires_at': expires_at,
+        'delivery': 'email',
+        'recipient_email': recipient,
+    }
+
+
+@router.post('/personal-download-requests/{request_id}/verify-otp')
+def verify_personal_download_otp(
+    request_id: int,
+    data: PersonalDownloadVerificationInput,
+    db: DbSession,
+    user: Annotated[User, Depends(require_roles(
+        Role.OWNER, Role.VENDOR, Role.SUPERVISOR_A,
+        Role.SUPERVISOR_B, Role.ADMIN,
+    ))],
+):
+    validate_personal_download_input(data, user)
+    request_row = db.scalar(select(DataRequest).where(
+        DataRequest.id == request_id,
+        DataRequest.vendor_id == user.id,
+        DataRequest.purpose == (
+            f'personal-download:{user.role.value}:{data.data_type}'
+        ),
+    ))
+    if request_row is None:
+        raise HTTPException(404, 'Request not found')
+    challenge = db.scalar(
+        select(OtpChallenge)
+        .where(OtpChallenge.request_id == request_id)
+        .order_by(OtpChallenge.id.desc())
+        .limit(1)
+        .with_for_update()
+    )
+    if challenge is None:
+        raise HTTPException(404, 'OTP challenge not found')
+    now = utc_now_naive()
+    if now >= challenge.expires_at:
+        db.delete(challenge)
+        db.commit()
+        raise HTTPException(410, 'OTP has expired')
+    if challenge.attempt_count >= challenge.max_attempts:
+        db.delete(challenge)
+        db.commit()
+        raise HTTPException(429, 'OTP attempt limit reached')
+    expected = personal_download_digest(request_id, data.otp, user, data)
+    if not hmac.compare_digest(challenge.otp_hash, expected):
+        challenge.attempt_count += 1
+        exhausted = challenge.attempt_count >= challenge.max_attempts
+        if exhausted:
+            db.delete(challenge)
+        db.commit()
+        if exhausted:
+            raise HTTPException(429, 'OTP attempt limit reached')
+        raise HTTPException(422, 'OTP is incorrect')
+    validate_personal_download_scope(db, user, data)
+    download = generate_personal_download(db, user, data)
+    db.delete(challenge)
+    db.commit()
+    return download
 
 
 @router.post('/vendor/location-requests', status_code=201)
@@ -858,7 +1074,7 @@ def submit_vendor_location_request(
         ),
         expires_at=expires_at,
     ))
-    db.commit()
+    recipient = deliver_otp_and_commit(db, user, otp)
 
     response.headers['Cache-Control'] = 'no-store'
     response.headers['Pragma'] = 'no-cache'
@@ -866,7 +1082,8 @@ def submit_vendor_location_request(
     return {
         'request_id': request_row.id,
         'expires_at': expires_at,
-        'demo_otp': otp,
+        'delivery': 'email',
+        'recipient_email': recipient,
     }
 
 
@@ -1027,14 +1244,15 @@ def submit_supervisor_a_speed_request(
         ),
         expires_at=expires_at,
     ))
-    db.commit()
+    recipient = deliver_otp_and_commit(db, user, otp)
 
     response.headers['Cache-Control'] = 'no-store'
     response.headers['Pragma'] = 'no-cache'
     return {
         'request_id': request_row.id,
         'expires_at': expires_at,
-        'demo_otp': otp,
+        'delivery': 'email',
+        'recipient_email': recipient,
     }
 
 
@@ -1194,14 +1412,15 @@ def submit_supervisor_b_location_request(
         ),
         expires_at=expires_at,
     ))
-    db.commit()
+    recipient = deliver_otp_and_commit(db, user, otp)
 
     response.headers['Cache-Control'] = 'no-store'
     response.headers['Pragma'] = 'no-cache'
     return {
         'request_id': request_row.id,
         'expires_at': expires_at,
-        'demo_otp': otp,
+        'delivery': 'email',
+        'recipient_email': recipient,
     }
 
 
@@ -1391,13 +1610,14 @@ def submit_scoped_otp_request(
         ),
         expires_at=expires_at,
     ))
-    db.commit()
+    recipient = deliver_otp_and_commit(db, user, otp)
     response.headers['Cache-Control'] = 'no-store'
     response.headers['Pragma'] = 'no-cache'
     return {
         'request_id': request_row.id,
         'expires_at': expires_at,
-        'demo_otp': otp,
+        'delivery': 'email',
+        'recipient_email': recipient,
         'plate': data.plate,
         'start': start,
         'end': end,

@@ -6,6 +6,64 @@
 
 - [後端套件與登入流程說明](docs/backend-packages.md)
 
+## 專案資料夾架構
+
+```text
+Zero-Trust-Vehicle-Data-Sharing-with-Threshold-Decryption/
+├── frontend/                 # 靜態網頁，由瀏覽器呼叫 API
+│   ├── login.html            # 登入與公開訪客入口
+│   ├── index.html            # 登入後依角色導頁
+│   ├── owner.html / visitor.html / vendor.html
+│   ├── supervisor_a.html / supervisor_b.html
+│   ├── admin.html / researcher.html / police.html
+│   ├── app.js                # 登入、查詢、OTP 與 CSV 下載
+│   └── style.css             # 共用樣式
+├── backend/                  # FastAPI API 與資料存取
+│   ├── main.py               # 應用程式、CORS、登入與帳號查詢 API
+│   ├── auth.py               # bcrypt 密碼驗證與 JWT 簽發／驗證
+│   ├── dependencies.py       # 資料庫 session、目前使用者與角色授權
+│   ├── database.py           # .env 載入、MySQL engine 與 session
+│   ├── models.py             # 六張資料表的 ORM 定義
+│   ├── schemas.py            # 帳號與登入回應格式
+│   ├── workspace.py          # 公開統計、角色查詢與 OTP API
+│   ├── mailer.py             # OTP 收件設定與 Gmail API／SMTP 寄信
+│   ├── gmail.py              # Gmail API 憑證載入與更新
+│   ├── gmail-credentials.json # 本機 OAuth 用戶端憑證，不提交
+│   ├── gmail-token.json       # 本機寄件帳號授權，不提交
+│   ├── migrations/           # 既有資料表結構調整 SQL
+│   ├── requirements.txt      # Python 套件版本
+│   ├── .env.example          # 可提交的設定範本
+│   ├── .env                  # 本機設定與秘密，不提交
+│   └── README.md             # 後端詳細說明
+├── scripts/                  # 建表、模擬與資料保護工具
+│   ├── create_table.py        # 只建立缺少的資料表
+│   ├── authorize_gmail.py     # 寄件帳號的一次性 OAuth 授權工具
+│   ├── simulation_data.py     # 模擬車輛並寫入加密資料
+│   ├── main.py                # 另一個模擬資料執行入口
+│   ├── encryption.py          # AES-GCM、金鑰初始化與車牌 HMAC
+│   ├── decryption.py          # 依欄位解密
+│   ├── pets.py                # 軌跡去頭尾、偏移、假名與時間粗化
+│   └── README.md              # 工具詳細說明
+├── docs/
+│   ├── backend-packages.md    # 後端套件與登入流程說明
+│   └── images/system-architecture.svg # 系統架構圖
+├── .gitignore
+├── .demo-accounts.json        # 本機測試帳號密碼，不提交
+└── README.md
+```
+
+`frontend/` 負責畫面與送出請求；`backend/` 負責驗證、授權與資料庫存取；`scripts/` 同時提供命令列工具及後端使用的加解密、PETs 函式。`.env`、`.demo-accounts.json` 與 `.venv/` 都是本機檔案，clone 後需另外準備。
+
+## 系統架構圖
+
+![系統架構圖](docs/images/system-architecture.svg)
+
+[開啟完整架構圖](docs/images/system-architecture.svg)
+
+登入憑證存於瀏覽器本分頁的 `sessionStorage`；受保護 API 每次都從資料庫重新確認帳號狀態與角色。車主查詢另檢查所有權綁定，公開統計不需要 JWT。資料庫保存分欄密文，後端在記憶體中解密、處理後回傳 JSON 或 CSV。
+
+車主本人下載 OTP 已接上 Email 寄送，API 不回傳車主驗證碼；所有已實作 OTP 的角色與精準欄位申請均使用 Email 驗證。尚未串接實際主管核准流程。專案名稱包含 Threshold Decryption，但目前實作是三把獨立 AES 金鑰與角色授權，尚未實作門檻解密。
+
 ## 1. Clone 後安裝 Python 3.11 與專案套件
 
 本專案使用 Python 3.11。`.venv/` 是每位開發者在自己電腦建立的虛擬環境，不會提交到 GitHub。若 Ubuntu 內建的是其他 Python 版本，可用 `uv` 安裝獨立的 Python 3.11，不會更改系統 Python。
@@ -81,6 +139,14 @@ python -c 'import secrets; print(secrets.token_urlsafe(48))'
 ```
 
 編輯 `backend/.env`，填入自己的 MySQL 密碼，並將指令產生的隨機值填入 `JWT_SECRET`。`backend/.env` 含有秘密且已被 Git 忽略，不可提交。
+
+初始化三把 AES-256-GCM 金鑰（已存在的值不會被覆蓋）：
+
+```bash
+python scripts/encryption.py --init-keys
+```
+
+`PLATE_KEY`、`LOCATION_KEY`、`SPEED_KEY` 必須是 Base64 編碼、解碼後各為 32 bytes。保留與既有資料相符的金鑰；任意更換會使原有密文無法解密，變更 `PLATE_KEY` 也會改變車牌查詢碼。修改 `.env` 後請停止並重新啟動後端，`--reload` 不保證重新載入設定檔。
 
 預設資料庫設定為：
 
@@ -158,7 +224,7 @@ FastAPI 啟動時不再自動建立資料表。開啟 API 文件：
 http://127.0.0.1:8000/docs
 ```
 
-可先使用 `POST /auth/register` 建立訪客帳號，再以 `POST /auth/login` 登入。`GET /auth/me` 需要 Bearer JWT；`GET /users` 僅允許 admin。停止後端時在終端機按 `Ctrl+C`。
+目前沒有 `POST /auth/register`；登入帳號需預先建立於 `users`，密碼需以 `backend/auth.py` 的 `hash_password()` 產生 bcrypt 雜湊。公開訪客不需帳號。`POST /auth/login` 接收表單格式的 username 與 password；`GET /auth/me` 需要 Bearer JWT，`GET /users` 與 `GET /users/lookup` 僅允許 admin。停止後端時在終端機按 `Ctrl+C`。
 
 ## 5. 執行車輛模擬資料
 
@@ -169,7 +235,7 @@ source .venv/bin/activate
 python scripts/simulation_data.py
 ```
 
-模擬程式先將車輛識別碼、位置與速度加密，再透過 `backend/database.py` 使用 `DB_NAME` 指定的資料庫，將結果寫入 `encrypted_trajectories`。`vehicles` 只保存不透明內部 ID 與 HMAC 查詢碼，不保存解密後的車牌。
+預設模擬 10 台車、2 天資料，車輛代碼為 `V00000`～`V00009`。重複執行會在交易中取代這批車輛先前的加密軌跡，不是單純追加。模擬程式先將車輛識別碼、位置與速度加密，再透過 `backend/database.py` 使用 `DB_NAME` 指定的資料庫，將結果寫入 `encrypted_trajectories`。`vehicles` 只保存不透明內部 ID 與 HMAC 查詢碼，不保存解密後的車牌。
 
 可進入 MySQL 確認資料：
 
@@ -223,7 +289,7 @@ http://127.0.0.1:5500/login.html
 
 若無法連線，先確認兩個服務終端機仍在執行，再確認轉送規則。頁面缺少樣式或停在「等待 JavaScript 載入」時，在 Windows 瀏覽器直接開啟 `http://127.0.0.1:5500/style.css` 和 `http://127.0.0.1:5500/app.js`，確認可取得檔案，並按 `Ctrl + Shift + R` 強制重新整理。若頁面可開啟但登入或查詢無法連線，另開 `http://127.0.0.1:8000/docs` 檢查後端。
 
-## 專案資料流
+### 模擬資料寫入流程
 
 ```text
 scripts/simulation_data.py
@@ -247,39 +313,168 @@ vehicle_data_sharing.encrypted_trajectories
 
 登入身份呼叫 `/auth/login` 與 `/auth/me` 驗證身份，角色頁會呼叫 `/workspace` 載入工作區基本資料。公開訪客頁不建立 session，只呼叫公開的時間範圍與平均速度 API。
 
-| 身份 | 測試帳號 | 目前展示的畫面 |
+| 身份 | 測試帳號 | 目前功能 |
 | --- | --- | --- |
 | 車主 | `demo_owner` | 輸入本人綁定車牌與選填時間，下載模糊位置或模糊速度 CSV |
 | 訪客 | 不需帳號 | 選擇時間後只顯示所有車輛的整體平均速度 |
-| 合作廠商 | `demo_vendor` | 依車牌與時間下載模糊位置或精準速度 CSV；左側申請流程尚未串接 |
-| 主管 A | `demo_supervisor_a` | 依車牌與時間下載精準位置 CSV；左側精準速度申請尚未串接 |
-| 主管 B | `demo_supervisor_b` | 速度查詢、主管 A OTP 申請與驗證入口（精準位置） |
-| 系統管理者 | `demo_admin` | 帳號管理、服務與日誌、資料查詢及 OTP 入口 |
-| 交通研究者 | `demo_researcher` | 依時間查詢研究資料，不顯示車牌查詢欄位 |
-| 警方 | `demo_police` | 依車牌與時間查詢，以及 Email OTP 申請與驗證入口 |
+| 合作廠商 | `demo_vendor` | 依車牌與時間下載模糊位置或精準速度 CSV；Email OTP 驗證後下載精準位置 |
+| 主管 A | `demo_supervisor_a` | 依車牌與時間下載精準位置 CSV；Email OTP 驗證後下載精準速度 |
+| 主管 B | `demo_supervisor_b` | 依車牌與時間下載精準速度 CSV；Email OTP 驗證後下載精準位置 |
+| 系統管理者 | `demo_admin` | 帳號查詢、會員／車輛／身分數、模糊資料 CSV 與精準資料 Email OTP |
+| 交通研究者 | `demo_researcher` | 依時間下載經 PETs 處理的研究 CSV，不提供車牌篩選 |
+| 警方 | `demo_police` | 模糊資料按鈕仍為展示；精準位置／速度 Email OTP 與 CSV 下載已串接 |
 
 操作方式：開啟 `http://127.0.0.1:5500/login.html`；訪客直接點選「訪客」，其他身份輸入測試帳號。車主可下載本人綁定車輛的模糊位置或速度 CSV；公開訪客只能查詢整體平均速度，沒有下載功能。
 
 後端每次受保護請求都重新查詢帳號角色及啟用狀態。訪客不建立帳號，公開註冊 API 已移除。
 
-此版本使用三把獨立的 AES-256-GCM 金鑰分欄保護車牌、位置與速度。授權設計不採用門檻解密或主管 A、B 共同重建金鑰：主管 A 負責精準位置的授權，主管 B 負責精準速度的授權，兩種資料各自驗證，不要求兩位主管同時同意。警方可依車牌與時間分別申請精準位置或精準速度 Demo OTP，驗證後下載對應 CSV；目前原始 OTP 仍由 API 回傳，尚未寄送 Email。資料筆數少時，彙總值仍不等同匿名化保證。
+此版本使用三把獨立的 AES-256-GCM 金鑰分欄保護車牌、位置與速度。授權設計不採用門檻解密或主管 A、B 共同重建金鑰：主管 A 負責精準位置的授權，主管 B 負責精準速度的授權，兩種資料各自驗證，不要求兩位主管同時同意。警方可依車牌與時間分別申請精準位置或精準速度 Email OTP，驗證後下載對應 CSV；驗證碼透過 Email 寄送，API 不回傳原始 OTP。資料筆數少時，彙總值仍不等同匿名化保證。
 
-交通統計及每日分析使用 `encrypted_trajectories`，後端只在記憶體中解密計算所需欄位。車主使用 `GET /workspace/trajectories` 輸入車牌；後端計算 `plate_lookup`、檢查 `vehicle_ownerships`，再查詢加密軌跡。時間條件可省略，若提供則包含起訖端點且不帶時區。位置 CSV 會在記憶體副本中切分行程，每趟首尾至少移除 200～500 公尺及 1 分鐘；每趟行程的經緯度分別使用由伺服器密鑰穩定產生、介於 `±0.0005°` 的固定偏移，使近似軌跡保留相對移動且不公開上下限。時間篩選在 PETs 處理後才套用。速度 CSV 採 10 km/h 區間（不含上限）。處理過程不會回寫或修改 `encrypted_trajectories`。資料申請使用 `data_requests`，OTP 驗證狀態使用只保存雜湊的 `otp_challenges`。六張資料表統一定義於 `backend/models.py`，由 `scripts/create_table.py` 建立。
+交通統計及每日分析使用 `encrypted_trajectories`，後端只在記憶體中解密計算所需欄位。車主使用 `GET /workspace/trajectories` 輸入車牌；後端計算 `plate_lookup`、檢查 `vehicle_ownerships`，再查詢加密軌跡。目前車主本人下載 OTP 申請需提供完整起訖時間，包含端點且不帶時區。位置 CSV 會在記憶體副本中切分行程，每趟首尾至少移除 200～500 公尺及 1 分鐘；每趟行程的經緯度分別使用由伺服器密鑰穩定產生、介於 `±0.0005°` 的固定偏移，使近似軌跡保留相對移動且不公開上下限。時間篩選在 PETs 處理後才套用。速度 CSV 採 10 km/h 區間（不含上限）。處理過程不會回寫或修改 `encrypted_trajectories`。資料申請使用 `data_requests`，OTP 驗證狀態使用只保存雜湊的 `otp_challenges`。六張資料表統一定義於 `backend/models.py`，由 `scripts/create_table.py` 建立。
 
-合作廠商使用 `GET /workspace/vendor/trajectories` 依車牌與必填時間範圍下載資料。位置 CSV 套用與車主分離的固定 PETs 偏移並去除行程首尾；速度 CSV 回傳解密後的精準速度。兩種 CSV 都不包含車牌、`plate_lookup` 或密文。目前只完成右側查詢下載，尚未強制連結左側申請與主管核准。
+合作廠商使用 `GET /workspace/vendor/trajectories` 依車牌與必填時間範圍下載資料。位置 CSV 套用與車主分離的固定 PETs 偏移並去除行程首尾；速度 CSV 回傳解密後的精準速度。兩種 CSV 都不包含車牌、`plate_lookup` 或密文。右側查詢下載與左側 Email OTP 都已串接，但右側查詢尚未強制連結資料使用申請或實際主管核准。
 
-合作廠商左側已提供 OTP 模擬：建立位置申請時產生六位數 OTP，資料庫只暫存同時綁定車牌與時間範圍的 HMAC-SHA256 雜湊、五分鐘期限與錯誤次數。驗證成功會立即下載核准條件的精準位置 CSV 並刪除 OTP 紀錄；過期或達到錯誤上限的 OTP 也會在存取時清除。Demo 期間 API 會回傳原始 OTP 供本機輸入測試，目前尚未寄送 Email。
+合作廠商左側已提供 Email OTP 流程：建立位置申請時產生六位數 OTP，資料庫只暫存同時綁定車牌與時間範圍的 HMAC-SHA256 雜湊、五分鐘期限與錯誤次數。驗證成功會立即下載核准條件的精準位置 CSV 並刪除 OTP 紀錄；過期或達到錯誤上限的 OTP 也會在存取時清除。API 寄送 Email，回傳寄送方式與收件地址，不回傳原始 OTP。
 
 主管 A 使用 `GET /workspace/supervisor-a/locations` 依車牌與必填時間範圍下載精準位置 CSV。端點只允許 `supervisor_a`，並且只解密位置；CSV 不包含車牌、`plate_lookup`、速度或密文。
 
-主管 A 左側已提供精準速度 OTP 模擬。OTP 雜湊綁定車牌與時間範圍，五分鐘內最多嘗試五次；驗證成功後立即下載精準速度 CSV 並刪除 OTP 紀錄，過期或達到錯誤上限時也會在存取時清除。Demo 期間 API 會回傳原始 OTP 供本機測試，目前尚未寄送 Email。
+主管 A 左側已提供精準速度 Email OTP 流程。OTP 雜湊綁定車牌與時間範圍，五分鐘內最多嘗試五次；驗證成功後立即下載精準速度 CSV 並刪除 OTP 紀錄，過期或達到錯誤上限時也會在存取時清除。API 寄送 Email，回傳寄送方式與收件地址，不回傳原始 OTP。
 
 主管 B 使用 `GET /workspace/supervisor-b/speeds` 依車牌與必填時間範圍下載精準速度 CSV。端點只允許 `supervisor_b`，並且只解密速度；CSV 不包含車牌、`plate_lookup`、位置或密文。
 
-主管 B 左側已提供精準位置 OTP 模擬。OTP 雜湊綁定車牌與時間範圍，五分鐘內最多嘗試五次；驗證成功後立即下載精準位置 CSV 並刪除 OTP 紀錄，過期或達到錯誤上限時也會在存取時清除。Demo 期間 API 會回傳原始 OTP 供本機測試，目前尚未寄送 Email。
+主管 B 左側已提供精準位置 Email OTP 流程。OTP 雜湊綁定車牌與時間範圍，五分鐘內最多嘗試五次；驗證成功後立即下載精準位置 CSV 並刪除 OTP 紀錄，過期或達到錯誤上限時也會在存取時清除。API 寄送 Email，回傳寄送方式與收件地址，不回傳原始 OTP。
+
+車主、合作廠商、主管 A、主管 B 與系統管理者下載原有權限內的檔案前，另需通過本人下載 OTP。OTP 綁定登入帳號 ID、email、角色及完整查詢條件，五分鐘有效、最多錯誤五次且只允許一次下載。原本的直接下載 API 已移除；公開訪客沒有帳號 email，交通研究者依目前規則不要求本人下載 OTP。車主目前改為 Email 寄送，回應只含寄送方式與收件 email，不含原始 OTP；其他角色的本人下載也透過 Email 寄送，不回傳原始 OTP。
 
 系統管理者使用 `GET /workspace/admin/trajectories` 依必填時間與車牌篩選資料，可另加完整速度範圍。後端解密後套用速度條件，再輸出已去除行程首尾的模糊位置與 10 km/h 速度區間 CSV；CSV 不包含車牌、`plate_lookup`、精準位置、精準速度或密文。
 
-系統管理者的 OTP 申請可選精準位置或精準速度，車牌必填，時間範圍選填。未填時間時使用該車目前完整資料時間；查不到可下載資料時回傳錯誤，不產生空 CSV。Demo OTP 綁定資料類型及申請範圍，五分鐘有效、最多錯誤五次，驗證成功即下載對應精準 CSV 並刪除 OTP 紀錄。此版本仍由 API 回傳 Demo OTP，尚未寄送 Email 或串接主管核准。
+系統管理者的 OTP 申請可選精準位置或精準速度，車牌必填，時間範圍選填。未填時間時使用該車目前完整資料時間；查不到可下載資料時回傳錯誤，不產生空 CSV。Email OTP 綁定資料類型及申請範圍，五分鐘有效、最多錯誤五次，驗證成功即下載對應精準 CSV 並刪除 OTP 紀錄。驗證碼已透過 Email 寄送，尚未串接實際主管核准。
 
 交通研究者使用 `GET /workspace/researcher/trajectories` 依必填時間範圍下載研究 CSV。後端先對完整資料套用 `apply_researcher_pets()`，包含行程首尾去除、假名與靜默期、位置偏移、降低頻率、`coarsen_time()` 時間粗化及速度取整，再依時間範圍輸出；不提供車牌查詢或精準欄位。
+
+
+## 8. 車主綁定與資料表
+
+模擬腳本會登記車輛與加密軌跡，但不會建立帳號或自動綁定車主。車主必須在 `vehicle_ownerships` 中有對應紀錄才可下載資料。
+
+| 資料表 | 用途 |
+| --- | --- |
+| `users` | 帳號、bcrypt 密碼雜湊、角色與啟用狀態 |
+| `vehicles` | 不透明 `vehicle_id` 與車牌 HMAC `plate_lookup` |
+| `vehicle_ownerships` | 車主帳號 ID 與 `vehicles.vehicle_id` 的綁定 |
+| `encrypted_trajectories` | 車牌／位置／速度密文、查詢碼及明文時間 |
+| `data_requests` | 資料使用申請與決策狀態 |
+| `otp_challenges` | OTP 雜湊、有效期限與驗證次數 |
+
+前端輸入的是模擬車牌，例如 `V00000`；綁定表的 `vehicle_id` 必須使用 `vehicles` 中的內部 ID，不能直接填入 `V00000`。可在專案根目錄唯讀查出待綁定車輛的內部 ID：
+
+```bash
+python - <<'PYCODE'
+from sqlalchemy import select
+from backend.database import SessionLocal
+from backend.models import Vehicle
+from scripts.encryption import make_plate_lookup
+
+with SessionLocal() as db:
+    vehicle_id = db.scalar(
+        select(Vehicle.vehicle_id).where(
+            Vehicle.plate_lookup == make_plate_lookup("V00000")
+        )
+    )
+    print(vehicle_id or "找不到車輛，請先確認模擬資料與金鑰")
+PYCODE
+```
+
+確認車主帳號與車輛後，再由資料庫管理者建立綁定。既有舊綁定需要遷移到同一輛車的內部 ID；`create_all()` 不會自動修正舊資料或外鍵。目前 `migrations/001_add_researcher_police.sql` 僅擴充角色 enum，需以具有 `ALTER` 權限的帳號執行，並不處理車輛綁定遷移。
+
+## 9. 常見問題
+
+| 現象 | 檢查與處理 |
+| --- | --- |
+| API 回傳 500，出現 `Table ... doesn't exist` | 執行 `python scripts/create_table.py` 補齊缺少的表 |
+| 登入正常，但資料查詢解密失敗 | 確認三把 AES 金鑰與寫入時相同；修改 `.env` 後重啟後端 |
+| 車主查詢回傳 403 | 確認帳號啟用、角色為 owner，且所有權綁定使用目前的內部車輛 ID |
+| 沒有可查詢時間或資料 | 確認已初始化金鑰、建表並執行模擬腳本；時間使用資料庫中的模擬期間 |
+| 登入回傳 401 | 使用 username 與原始密碼，確認帳號存在且已啟用 |
+| OTP 驗證失敗 | 使用本次申請的六位數碼及原車牌、時間與資料類型；五分鐘有效，最多錯誤五次 |
+
+公開平均速度先依車輛計算平均，再計算各車平均的平均值；範圍內不足三輛車時回傳 `null`。這個門檻不代表已實作差分隱私。現有角色 HTML 的部分提示仍保留「介面展示」或「尚未串接」文字，實際串接狀態以本 README 功能表與 `app.js` 的事件處理為準。
+
+
+## 10. Email OTP 與團隊開發設定
+
+### 目前實作範圍
+
+車主本人下載流程已支援 Gmail API 與 SMTP 寄信，API 不再回傳車主原始驗證碼。OTP 六位數、五分鐘有效、最多錯誤五次，驗證成功後下載 CSV 並刪除 OTP 紀錄。寄信失敗回傳 503，回滾本次申請與 OTP 紀錄。其他已實作 OTP 的角色也統一使用 Email 驗證；主管核准與寄信頻率限制尚未實作。
+
+### 寄件憑證由誰持有？
+
+`gmail-credentials.json` 與 `gmail-token.json` 都由後端管理，收取 OTP 的使用者不需要持有這些檔案，也不需要授權 Gmail API。
+
+| 檔案 | 用途 | 保存位置 |
+| --- | --- | --- |
+| `backend/gmail-credentials.json` | Google Cloud 電腦版 OAuth 用戶端資訊 | 後端本機，已被 Git 忽略 |
+| `backend/gmail-token.json` | 寄件帳號授權後取得的 access token 與 refresh token | 後端本機，已被 Git 忽略 |
+| `backend/.env` | 寄件模式、寄件地址、憑證路徑與測試收件設定 | 後端本機，已被 Git 忽略 |
+
+多人使用同一個已部署後端時，由該伺服器保存寄件憑證並統一寄信；使用者只需申請、收信與輸入 OTP。其他開發者自行 clone 並執行後端時，需準備自己的寄件設定，Git 不會提供現有帳號的授權 token。無須為每個收件者建立 Gmail OAuth 憑證。
+
+### 方案 A：Gmail API（目前本機使用）
+
+1. 在自己的 Google Cloud 專案啟用 Gmail API，設定 OAuth 同意畫面並建立「電腦版應用程式」用戶端。
+2. 下載 JSON，存為 `backend/gmail-credentials.json`。
+3. 在自己的 `backend/.env` 填入以下設定；寄件地址應與實際授權帳號相同。
+
+```dotenv
+MAIL_PROVIDER=gmail
+GMAIL_SENDER=your-sender@example.com
+GMAIL_CREDENTIALS_FILE=backend/gmail-credentials.json
+GMAIL_TOKEN_FILE=backend/gmail-token.json
+```
+
+4. 在專案根目錄執行授權工具：
+
+```bash
+source .venv/bin/activate
+python scripts/authorize_gmail.py
+```
+
+開啟工具印出的網址，以寄件帳號授予 `gmail.send` 權限。工具只完成授權，不寄信；成功後產生 `backend/gmail-token.json`。執行中的後端會在 token 過期時使用 refresh token 更新；若授權被撤銷或無法更新，需重新執行工具。完成設定後重啟後端。
+
+### Linux VM 與 Windows 瀏覽器
+
+工具監聽 Linux 的 `127.0.0.1:8765`。若瀏覽器也在 Linux，直接開啟授權網址；若瀏覽器在 Windows，先在 PowerShell 建立 SSH 轉送：
+
+```powershell
+ssh -N -L 8765:127.0.0.1:8765 Linux帳號@VM_IP
+```
+
+保持 SSH 視窗開啟，再在 Linux 執行授權工具並把網址貼到 Windows 瀏覽器。若 SSH 使用 NAT 轉送埠，可另加 `-p SSH主機連接埠`。VM 必須已啟用 SSH 且 Windows 能連線；單純將 8765 NAT 轉送到客體網卡，無法連到只監聽 loopback 的工具。
+
+### 方案 B：SMTP
+
+若開發者已有可使用的 SMTP 帳號，可以不建立 Gmail OAuth JSON，改為：
+
+```dotenv
+MAIL_PROVIDER=smtp
+SMTP_HOST=your-smtp-host
+SMTP_PORT=587
+SMTP_SECURITY=starttls
+SMTP_USERNAME=your-sender@example.com
+SMTP_PASSWORD=your-smtp-password
+SMTP_FROM=your-sender@example.com
+```
+
+支援 `starttls` 與 `ssl`，使用哪種驗證方式與連接埠需依寄信服務設定。SMTP 與 Gmail API 都只替換寄信方式，不改變 OTP 驗證流程。目前尚未接上第三方寄信 API 或驗證器 TOTP。
+
+### 收件地址與驗證
+
+預設寄到帳號的 `users.email`。本機測試可設定 `OTP_DEFAULT_EMAIL`；主管收件覆寫另有 `OTP_SUPERVISOR_A_EMAIL` 與 `OTP_SUPERVISOR_B_EMAIL`，留白時使用帳號 email。覆寫不修改帳號 email 的唯一性，此設定依申請者角色選擇收件地址，不會代替主管核准。正式使用前應移除共用測試收件覆寫，使車主收到自己的驗證碼。
+
+重啟後端，以車主帳號登入並申請下載。確認頁面顯示寄送地址，到該信箱取得 OTP，五分鐘內輸入並下載。API 成功只表示寄信服務接受請求，不代表已進入收件匣；未收到時檢查垃圾郵件、所有郵件與寄件帳號的寄件備份。
+
+自動測試使用模擬 Gmail API／SMTP，不寄出真實郵件：
+
+```bash
+python -m unittest discover -s tests -v
+```

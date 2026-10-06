@@ -123,6 +123,105 @@ async function authenticatedPostDownload(path, token, body) {
 }
 
 
+async function requestPersonalDownloadOtp(token, payload, filename, buttons) {
+    buttons.forEach(button => { button.disabled = true; });
+    message.textContent = "正在建立本人下載 OTP…";
+    try {
+        const request = await authenticatedRequest(
+            "/workspace/personal-download-requests",
+            token,
+            {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(payload),
+            },
+        );
+        const container = buttons[0].closest(".feature-card") || buttons[0].parentElement;
+        container.querySelector("[data-personal-download-otp]")?.remove();
+        const otpPanel = document.createElement("div");
+        otpPanel.className = "otp-entry";
+        otpPanel.dataset.personalDownloadOtp = "";
+        const label = document.createElement("label");
+        label.textContent = "本人下載 OTP";
+        const input = document.createElement("input");
+        input.type = "text";
+        input.inputMode = "numeric";
+        input.maxLength = 6;
+        input.autocomplete = "one-time-code";
+        input.placeholder = "請輸入 6 位數 OTP";
+        const verifyButton = document.createElement("button");
+        verifyButton.type = "button";
+        verifyButton.textContent = "驗證並下載";
+        otpPanel.append(label, input, verifyButton);
+        buttons[0].closest(".preview-actions")?.after(otpPanel);
+        buttons.forEach(button => { button.hidden = true; });
+        input.addEventListener("input", () => {
+            input.value = input.value.replace(/\D/g, "").slice(0, 6);
+        });
+        verifyButton.addEventListener("click", async () => {
+            if (!/^\d{6}$/.test(input.value)) {
+                message.textContent = "請輸入完整的 6 位數本人下載 OTP。";
+                return;
+            }
+            input.disabled = true;
+            verifyButton.disabled = true;
+            message.textContent = "正在驗證本人 OTP 並產生 CSV…";
+            try {
+                const blob = await authenticatedPostDownload(
+                    `/workspace/personal-download-requests/${request.request_id}/verify-otp`,
+                    token,
+                    {...payload, otp: input.value},
+                );
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(url);
+                verifyButton.hidden = true;
+                message.textContent = "本人 OTP 驗證成功，CSV 已下載。";
+            } catch (error) {
+                if (error.status === 401) {
+                    clearSession();
+                    location.replace("login.html?reason=session");
+                    return;
+                }
+                if ([404, 409, 410, 429].includes(error.status)) {
+                    otpPanel.remove();
+                    buttons.forEach(button => {
+                        button.hidden = false;
+                        button.disabled = false;
+                    });
+                } else {
+                    input.disabled = false;
+                    verifyButton.disabled = false;
+                    input.focus();
+                }
+                const messages = {
+                    404: "找不到申請或資料，請重新送出下載申請。",
+                    410: "OTP 已過期，請重新送出下載申請。",
+                    422: "OTP 不正確，請重新輸入。",
+                    429: "OTP 錯誤次數已達上限，請重新送出下載申請。",
+                };
+                message.textContent = messages[error.status] || error.message;
+            }
+        });
+        input.focus();
+        message.textContent = `驗證碼已寄至 ${request.recipient_email}，請於 5 分鐘內輸入。`;
+    } catch (error) {
+        if (error.status === 401) {
+            clearSession();
+            location.replace("login.html?reason=session");
+            return;
+        }
+        buttons.forEach(button => { button.disabled = false; });
+        message.textContent = error.message;
+    }
+}
+
+
 function displayDateTime(value) {
     const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/.exec(value);
     if (!match) return value;
@@ -166,45 +265,25 @@ function initializeOwnerWorkspace(token, workspaceData) {
                 plateInput.focus();
                 return;
             }
-            if (startInput.value && endInput.value && startInput.value > endInput.value) {
+            if (!startInput.value || !endInput.value) {
+                message.textContent = "請選擇開始時間與結束時間。";
+                return;
+            }
+            if (startInput.value > endInput.value) {
                 message.textContent = "開始時間不能晚於結束時間。";
                 startInput.focus();
                 return;
             }
 
             const dataType = button.dataset.ownerExport;
-            const params = new URLSearchParams({plate, data_type: dataType});
-            if (startInput.value) params.set("start", startInput.value);
-            if (endInput.value) params.set("end", endInput.value);
-
-            buttons.forEach((item) => { item.disabled = true; });
-            message.textContent = "正在驗證車輛、解密並產生 CSV…";
-            try {
-                const blob = await authenticatedDownload(
-                    `/workspace/trajectories?${params.toString()}`,
-                    token,
-                );
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement("a");
-                link.href = url;
-                link.download = `owner-${dataType}-trajectories.csv`;
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
-                URL.revokeObjectURL(url);
-                message.textContent = dataType === "location"
-                    ? "模糊位置 CSV 已下載。"
-                    : "模糊速度 CSV 已下載。";
-            } catch (error) {
-                if (error.status === 401) {
-                    clearSession();
-                    location.replace("login.html?reason=session");
-                    return;
-                }
-                message.textContent = error.message;
-            } finally {
-                buttons.forEach((item) => { item.disabled = false; });
-            }
+            await requestPersonalDownloadOtp(token, {
+                data_type: dataType,
+                plate,
+                start: startInput.value,
+                end: endInput.value,
+                min_speed: null,
+                max_speed: null,
+            }, `owner-${dataType}-trajectories.csv`, buttons);
         });
     });
 }
@@ -254,7 +333,7 @@ function initializeVendorWorkspace(token, workspaceData) {
                 return;
             }
             requestButton.disabled = true;
-            message.textContent = "正在建立精準位置申請與 Demo OTP…";
+            message.textContent = "正在建立精準位置申請與 Email OTP…";
             try {
                 const result = await authenticatedRequest(
                     "/workspace/vendor/location-requests",
@@ -274,7 +353,7 @@ function initializeVendorWorkspace(token, workspaceData) {
                 requestButton.hidden = true;
                 otpEntry.hidden = false;
                 otpInput.focus();
-                message.textContent = `Demo OTP：${result.demo_otp}（5 分鐘內有效）`;
+                message.textContent = `驗證碼已寄至 ${result.recipient_email}，請於 5 分鐘內輸入。`;
             } catch (error) {
                 if (error.status === 401) {
                     clearSession();
@@ -371,40 +450,14 @@ function initializeVendorWorkspace(token, workspaceData) {
             }
 
             const dataType = button.dataset.vendorExport;
-            const params = new URLSearchParams({
-                plate,
+            await requestPersonalDownloadOtp(token, {
                 data_type: dataType,
+                plate,
                 start: startInput.value,
                 end: endInput.value,
-            });
-            buttons.forEach((item) => { item.disabled = true; });
-            message.textContent = "正在解密並產生 CSV…";
-            try {
-                const blob = await authenticatedDownload(
-                    `/workspace/vendor/trajectories?${params.toString()}`,
-                    token,
-                );
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement("a");
-                link.href = url;
-                link.download = `vendor-${dataType}-trajectories.csv`;
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
-                URL.revokeObjectURL(url);
-                message.textContent = dataType === "location"
-                    ? "模糊位置 CSV 已下載。"
-                    : "精準速度 CSV 已下載。";
-            } catch (error) {
-                if (error.status === 401) {
-                    clearSession();
-                    location.replace("login.html?reason=session");
-                    return;
-                }
-                message.textContent = error.message;
-            } finally {
-                buttons.forEach((item) => { item.disabled = false; });
-            }
+                min_speed: null,
+                max_speed: null,
+            }, `vendor-${dataType}-trajectories.csv`, buttons);
         });
     });
 }
@@ -449,7 +502,7 @@ function initializeSupervisorAWorkspace(token, workspaceData) {
             return;
         }
         requestButton.disabled = true;
-        message.textContent = "正在建立精準速度申請與 Demo OTP…";
+        message.textContent = "正在建立精準速度申請與 Email OTP…";
         try {
             const result = await authenticatedRequest(
                 "/workspace/supervisor-a/speed-requests",
@@ -469,7 +522,7 @@ function initializeSupervisorAWorkspace(token, workspaceData) {
             requestButton.hidden = true;
             otpEntry.hidden = false;
             otpInput.focus();
-            message.textContent = `Demo OTP：${result.demo_otp}（5 分鐘內有效）`;
+            message.textContent = `驗證碼已寄至 ${result.recipient_email}，請於 5 分鐘內輸入。`;
         } catch (error) {
             if (error.status === 401) {
                 clearSession();
@@ -563,37 +616,14 @@ function initializeSupervisorAWorkspace(token, workspaceData) {
             return;
         }
 
-        const params = new URLSearchParams({
+        await requestPersonalDownloadOtp(token, {
+            data_type: "location",
             plate,
             start: startInput.value,
             end: endInput.value,
-        });
-        downloadButton.disabled = true;
-        message.textContent = "正在解密並產生精準位置 CSV…";
-        try {
-            const blob = await authenticatedDownload(
-                `/workspace/supervisor-a/locations?${params.toString()}`,
-                token,
-            );
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = "supervisor-a-locations.csv";
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            URL.revokeObjectURL(url);
-            message.textContent = "精準位置 CSV 已下載。";
-        } catch (error) {
-            if (error.status === 401) {
-                clearSession();
-                location.replace("login.html?reason=session");
-                return;
-            }
-            message.textContent = error.message;
-        } finally {
-            downloadButton.disabled = false;
-        }
+            min_speed: null,
+            max_speed: null,
+        }, "supervisor-a-locations.csv", [downloadButton]);
     });
 }
 
@@ -637,7 +667,7 @@ function initializeSupervisorBWorkspace(token, workspaceData) {
             return;
         }
         requestButton.disabled = true;
-        message.textContent = "正在建立精準位置申請與 Demo OTP…";
+        message.textContent = "正在建立精準位置申請與 Email OTP…";
         try {
             const result = await authenticatedRequest(
                 "/workspace/supervisor-b/location-requests",
@@ -657,7 +687,7 @@ function initializeSupervisorBWorkspace(token, workspaceData) {
             requestButton.hidden = true;
             otpEntry.hidden = false;
             otpInput.focus();
-            message.textContent = `Demo OTP：${result.demo_otp}（5 分鐘內有效）`;
+            message.textContent = `驗證碼已寄至 ${result.recipient_email}，請於 5 分鐘內輸入。`;
         } catch (error) {
             if (error.status === 401) {
                 clearSession();
@@ -751,37 +781,14 @@ function initializeSupervisorBWorkspace(token, workspaceData) {
             return;
         }
 
-        const params = new URLSearchParams({
+        await requestPersonalDownloadOtp(token, {
+            data_type: "speed",
             plate,
             start: startInput.value,
             end: endInput.value,
-        });
-        downloadButton.disabled = true;
-        message.textContent = "正在解密並產生精準速度 CSV…";
-        try {
-            const blob = await authenticatedDownload(
-                `/workspace/supervisor-b/speeds?${params.toString()}`,
-                token,
-            );
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = "supervisor-b-speeds.csv";
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            URL.revokeObjectURL(url);
-            message.textContent = "精準速度 CSV 已下載。";
-        } catch (error) {
-            if (error.status === 401) {
-                clearSession();
-                location.replace("login.html?reason=session");
-                return;
-            }
-            message.textContent = error.message;
-        } finally {
-            downloadButton.disabled = false;
-        }
+            min_speed: null,
+            max_speed: null,
+        }, "supervisor-b-speeds.csv", [downloadButton]);
     });
 }
 
@@ -927,7 +934,7 @@ function initializeAdminOtpWorkspace(token, workspaceData) {
             otpButton.hidden = false;
             otpLabel.textContent = dataType === "location" ? "主管 A OTP（精準位置）" : "主管 B OTP（精準速度）";
             otpEntry.hidden = false;
-            statusText.textContent = `Demo OTP：${result.demo_otp}（5 分鐘內有效）。範圍：${result.plate || "所有車輛"}，${displayDateTime(result.start)} ～ ${displayDateTime(result.end)}`;
+            statusText.textContent = `驗證碼已寄至 ${result.recipient_email}，請於 5 分鐘內輸入。。範圍：${result.plate || "所有車輛"}，${displayDateTime(result.start)} ～ ${displayDateTime(result.end)}`;
         } catch (error) {
             if (error.status === 401) {
                 clearSession();
@@ -1074,42 +1081,14 @@ function initializeAdminWorkspace(token, workspaceData) {
             return;
         }
 
-        const params = new URLSearchParams({
+        await requestPersonalDownloadOtp(token, {
+            data_type: "trajectories",
+            plate,
             start: startInput.value,
             end: endInput.value,
-        });
-        if (plate) params.set("plate", plate);
-        if (hasMinSpeed) {
-            params.set("min_speed", minSpeed);
-            params.set("max_speed", maxSpeed);
-        }
-
-        queryButton.disabled = true;
-        message.textContent = "正在篩選、解密並產生模糊資料 CSV…";
-        try {
-            const blob = await authenticatedDownload(
-                `/workspace/admin/trajectories?${params.toString()}`,
-                token,
-            );
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = "admin-trajectories.csv";
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            URL.revokeObjectURL(url);
-            message.textContent = "管理者模糊資料 CSV 已下載。";
-        } catch (error) {
-            if (error.status === 401) {
-                clearSession();
-                location.replace("login.html?reason=session");
-                return;
-            }
-            message.textContent = error.message;
-        } finally {
-            queryButton.disabled = false;
-        }
+            min_speed: hasMinSpeed ? Number(minSpeed) : null,
+            max_speed: hasMaxSpeed ? Number(maxSpeed) : null,
+        }, "admin-trajectories.csv", [queryButton]);
     });
 }
 
@@ -1419,7 +1398,7 @@ async function initializePoliceOtpWorkspace(token) {
         const dataType = event.submitter?.value === "speed" ? "speed" : "location";
         const dataLabel = dataType === "speed" ? "精準速度" : "精準位置";
         setBusy(true);
-        statusText.textContent = `正在建立${dataLabel}申請與 Demo OTP…`;
+        statusText.textContent = `正在建立${dataLabel}申請與 Email OTP…`;
         try {
             const result = await authenticatedRequest(
                 `/workspace/police/${dataType}-requests`,
@@ -1439,7 +1418,7 @@ async function initializePoliceOtpWorkspace(token) {
             otpLabel.textContent = `${dataLabel} Email OTP`;
             otpInput.value = "";
             otpEntry.hidden = false;
-            statusText.textContent = `Demo OTP：${result.demo_otp}（5 分鐘內有效）`;
+            statusText.textContent = `驗證碼已寄至 ${result.recipient_email}，請於 5 分鐘內輸入。`;
         } catch (error) {
             if (error.status === 401) {
                 clearSession();
